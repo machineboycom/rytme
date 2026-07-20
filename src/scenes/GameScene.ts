@@ -28,7 +28,6 @@ export class GameScene extends Phaser.Scene {
   private infoText!: Phaser.GameObjects.Text;
   private btnGraphics!: Phaser.GameObjects.Graphics;
   private gridGraphics!: Phaser.GameObjects.Graphics;
-  private hitArea!: Phaser.GameObjects.Zone;
 
   private cellSize = 0;
   private gridX = 0;
@@ -61,12 +60,9 @@ export class GameScene extends Phaser.Scene {
 
     this.btnGraphics = this.add.graphics();
 
-    this.hitArea = this.add
-      .zone(this.btnCX, this.btnCY, this.btnW, this.btnH)
-      .setInteractive();
-    this.hitArea.input!.enabled = false;
-    this.hitArea.on("pointerdown", () => this.onTapDown());
-    this.hitArea.on("pointerup", () => this.onTapUp());
+    this.input.on("pointerdown", () => this.onTapDown());
+    this.input.on("pointerup", () => this.onTapUp());
+    this.input.keyboard!.on("keydown-SPACE", () => this.onTapDown());
 
     this.tapLabel = this.add
       .text(this.btnCX, this.btnCY, "TRYKK", {
@@ -115,7 +111,6 @@ export class GameScene extends Phaser.Scene {
     this.statusText.setText("Trykk for å starte");
     this.renderButton();
     this.drawGrid();
-    this.hitArea.input!.enabled = true;
   }
 
   private scheduleBeats(
@@ -137,7 +132,6 @@ export class GameScene extends Phaser.Scene {
     this.state = "countdown";
     this.countdownTarget = target;
     this.lastHighlight = -1;
-    this.hitArea.input!.enabled = false;
 
     if (target === "listen") {
       this.level = LevelGenerator.generate();
@@ -171,7 +165,6 @@ export class GameScene extends Phaser.Scene {
   private enterListening(start: number): void {
     this.state = "listening";
     this.lastHighlight = -1;
-    this.hitArea.input!.enabled = false;
 
     this.phaseStartTime = start;
     this.renderButton();
@@ -185,7 +178,6 @@ export class GameScene extends Phaser.Scene {
   private enterPlaying(start: number): void {
     this.state = "playing";
     this.lastHighlight = -1;
-    this.hitArea.input!.enabled = true;
 
     this.phaseStartTime = start;
     this.renderButton();
@@ -198,7 +190,6 @@ export class GameScene extends Phaser.Scene {
 
   private enterResult(): void {
     this.state = "result";
-    this.hitArea.input!.enabled = true;
 
     const seq = this.level.sequence;
     const taps = this.playerTaps;
@@ -336,7 +327,7 @@ export class GameScene extends Phaser.Scene {
         const cy = y + s / 2;
         const r = s / 2 - 1;
 
-        g.fillStyle(0x15152e, 0.8);
+        g.fillStyle(colors.tileShadow, 1);
         g.fillCircle(cx, cy + 2, r + 2);
 
         g.fillStyle(color, alpha);
@@ -360,11 +351,13 @@ export class GameScene extends Phaser.Scene {
       this.state === "idle" || this.state === "playing"
         ? colors.accent
         : colors.error;
+    g.fillStyle(colors.tileShadow, 1);
+    g.fillCircle(this.btnCX, this.btnCY + 16, this.btnW / 2);
     g.fillStyle(btnColor, 1);
     g.fillCircle(this.btnCX, this.btnCY, this.btnW / 2);
 
     if (this.state === "idle") {
-      this.tapLabel.setText("TRYKK");
+      this.tapLabel.setText("START");
       this.tapLabel.setColor(colors.textWhite);
     } else if (this.state === "playing") {
       this.tapLabel.setText("TRYKK");
