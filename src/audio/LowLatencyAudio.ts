@@ -7,7 +7,7 @@ export class LowLatencyAudio {
 
   private getContext(): AudioContext {
     if (!this.ctx) {
-      this.ctx = new AudioContext()
+      this.ctx = new AudioContext({ latencyHint: 'interactive' })
     }
     if (this.ctx.state === 'suspended') {
       this.ctx.resume()
@@ -45,12 +45,16 @@ export class LowLatencyAudio {
   private playBuffer(buffer: AudioBuffer, time: number, volume = 1, playbackRate = 1): void {
     const ctx = this.getContext()
     const source = ctx.createBufferSource()
-    const gain = ctx.createGain()
     source.buffer = buffer
     source.playbackRate.value = playbackRate
-    gain.gain.setValueAtTime(volume, time)
-    source.connect(gain)
-    gain.connect(ctx.destination)
+    if (volume !== 1) {
+      const gain = ctx.createGain()
+      gain.gain.setValueAtTime(volume, time)
+      source.connect(gain)
+      gain.connect(ctx.destination)
+    } else {
+      source.connect(ctx.destination)
+    }
     source.start(time)
   }
 
@@ -74,7 +78,7 @@ export class LowLatencyAudio {
   }
 
   playSnareNow(): void {
-    this.playSnareAt(this.currentTime + 0.02)
+    this.playSnareAt(this.currentTime)
   }
 
   scheduleBuzz(time: number): void {

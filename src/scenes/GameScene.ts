@@ -237,12 +237,43 @@ export class GameScene extends Phaser.Scene {
         if (diff < 0.35) {
           this.playerTaps[beat] = true;
           audio.playSnareNow();
+          if (this.level.sequence[beat]) {
+            this.showHitEffect(beat);
+          }
         }
       }
 
       this.renderButton();
       this.drawGrid();
     }
+  }
+
+  private tileCenter(idx: number): { cx: number; cy: number } {
+    const bar = Math.floor(idx / 4);
+    const beat = idx % 4;
+    const s = this.cellSize;
+    const gap = 8;
+    return {
+      cx: this.gridX + beat * (s + gap) + s / 2,
+      cy: this.gridY + bar * (s + gap) + s / 2,
+    };
+  }
+
+  private showHitEffect(idx: number): void {
+    const { cx, cy } = this.tileCenter(idx);
+    const glow = this.add.graphics();
+    glow.setPosition(cx, cy);
+    glow.fillStyle(colors.accent, 0.8);
+    glow.fillCircle(0, 0, this.cellSize / 2 + 4);
+    this.tweens.add({
+      targets: glow,
+      alpha: 0,
+      scaleX: 2,
+      scaleY: 2,
+      duration: 500,
+      ease: "Quad.easeOut",
+      onComplete: () => glow.destroy(),
+    });
   }
 
   private onTapUp(): void {
@@ -270,6 +301,9 @@ export class GameScene extends Phaser.Scene {
       const beat = Math.floor(elapsed / BEAT);
       if (beat !== this.lastHighlight) {
         this.lastHighlight = beat;
+        if (this.state === "listening" && beat >= 0 && beat < TOTAL_BEATS && this.level.sequence[beat]) {
+          this.showHitEffect(beat);
+        }
         this.drawGrid();
       }
     }
