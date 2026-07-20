@@ -98,8 +98,7 @@ export class GameScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    this.renderButton();
-    this.enterIdle();
+    this.enterCountdown("listen");
   }
 
   private enterIdle(): void {
@@ -223,7 +222,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.state === "result") {
-      this.enterIdle();
+      this.enterCountdown("listen");
       return;
     }
 

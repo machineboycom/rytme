@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { GameScene } from './scenes/GameScene'
+import { audio } from './audio/LowLatencyAudio'
 import { colors } from './theme'
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -12,8 +13,7 @@ const config: Phaser.Types.Core.GameConfig = {
   },
   scene: [GameScene],
   audio: {
-    disableWebAudio: false,
-    noAudio: false,
+    noAudio: true,
   },
   input: {
     activePointers: 1,
@@ -24,4 +24,9 @@ const config: Phaser.Types.Core.GameConfig = {
   },
 }
 
-new Phaser.Game(config)
+document.getElementById('start-btn')!.addEventListener('click', () => {
+  document.getElementById('overlay')!.classList.add('hidden')
+  const ctx = new AudioContext()
+  audio.setContext(ctx)
+  new Phaser.Game(config)
+})

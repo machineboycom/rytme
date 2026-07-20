@@ -5,7 +5,11 @@ export class LowLatencyAudio {
   private snare2Buffer: AudioBuffer | null = null
   private snareIndex = 0
 
-  private getContext(): AudioContext {
+  setContext(ctx: AudioContext): void {
+    this.ctx = ctx
+  }
+
+  getContext(): AudioContext {
     if (!this.ctx) {
       this.ctx = new AudioContext({ latencyHint: 'interactive' })
     }
@@ -17,7 +21,7 @@ export class LowLatencyAudio {
 
   private async ensureRim(): Promise<AudioBuffer> {
     if (!this.rimBuffer) {
-      this.rimBuffer = await this.loadSample('/src/audio/rim.wav')
+      this.rimBuffer = await this.loadSample('/audio/rim.wav')
     }
     return this.rimBuffer
   }
@@ -25,12 +29,12 @@ export class LowLatencyAudio {
   private async ensureSnare(idx: number): Promise<AudioBuffer> {
     if (idx === 0) {
       if (!this.snare1Buffer) {
-        this.snare1Buffer = await this.loadSample('/src/audio/snare1.wav')
+        this.snare1Buffer = await this.loadSample('/audio/snare1.wav')
       }
       return this.snare1Buffer
     }
     if (!this.snare2Buffer) {
-      this.snare2Buffer = await this.loadSample('/src/audio/snare2.wav')
+      this.snare2Buffer = await this.loadSample('/audio/snare2.wav')
     }
     return this.snare2Buffer
   }
