@@ -7,7 +7,7 @@ export interface LevelData {
 export class LevelGenerator {
   static generate(seed?: number): LevelData {
     const s = seed ?? dateSeed();
-    const rng = mulberry32(1);
+    const rng = mulberry32(s);
 
     const sequence = new Array(16).fill(false);
 
@@ -28,7 +28,10 @@ export class LevelGenerator {
 
 function dateSeed(): number {
   const d = new Date();
-  return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+  // return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+  // return Math.random() * 10000;
+  // randomize per 10 minutes
+  return Math.floor(d.getTime() / (10 * 60 * 1000));
 }
 
 function mulberry32(seed: number): () => number {
