@@ -4,7 +4,7 @@ import { GameScene } from './scenes/GameScene'
 import { colors } from './theme'
 
 const config: Phaser.Types.Core.GameConfig = {
-  type: Phaser.AUTO,
+  type: Phaser.CANVAS,
   parent: document.body,
   backgroundColor: colors.bgCss,
   scale: {
@@ -16,7 +16,6 @@ const config: Phaser.Types.Core.GameConfig = {
     activePointers: 1,
   },
   render: {
-    pixelArt: false,
     antialias: true,
   },
 }

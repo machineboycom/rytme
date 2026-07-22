@@ -50,15 +50,14 @@ export class GameScene extends Phaser.Scene {
     const gridW = this.cellSize * 4 + 8 * 3;
     const gridH = this.cellSize * 4 + 8 * 3;
     this.gridX = (width - gridW) / 2;
+    this.gridY = 48;
+
+    this.gridGraphics = this.add.graphics();
 
     this.btnW = Math.min(200, width * 0.5);
     this.btnH = Math.min(200, this.btnW);
-    const contentH = gridH + 60 + this.btnH;
-    this.gridY = Math.max(20, (height - contentH) / 2);
     this.btnCX = width / 2;
     this.btnCY = this.gridY + gridH + 60 + this.btnH / 2;
-
-    this.gridGraphics = this.add.graphics();
 
     this.btnGraphics = this.add.graphics();
 
@@ -93,7 +92,7 @@ export class GameScene extends Phaser.Scene {
       .setAlpha(0);
 
     this.infoText = this.add
-      .text(width / 2, height - 20, "Rytme prototype, v1.0b", {
+      .text(width / 2, height - 20, "rytme", {
         fontFamily: "Arial, sans-serif",
         fontSize: "13px",
         color: colors.textMuted,
@@ -302,12 +301,7 @@ export class GameScene extends Phaser.Scene {
       const beat = Math.floor(elapsed / BEAT);
       if (beat !== this.lastHighlight) {
         this.lastHighlight = beat;
-        if (
-          this.state === "listening" &&
-          beat >= 0 &&
-          beat < TOTAL_BEATS &&
-          this.level.sequence[beat]
-        ) {
+        if (this.state === "listening" && beat >= 0 && beat < TOTAL_BEATS && this.level.sequence[beat]) {
           this.showHitEffect(beat);
         }
         this.drawGrid();
