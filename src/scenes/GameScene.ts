@@ -7,20 +7,26 @@ const BPM = 120;
 const BEAT = 60 / BPM;
 const TOTAL_BEATS = 16;
 const COUNT_IN = 4;
-const LISTEN_DURATION = TOTAL_BEATS * BEAT;
-const PLAY_DURATION = TOTAL_BEATS * BEAT;
 
-type Mode = "listen" | "play";
-type State = "idle" | "countdown" | "listening" | "playing" | "result";
+type State = "countdown" | "listening" | "playing" | "finalResult";
+
+const SEGMENTS = [
+  { start: 0, count: 4 },
+  { start: 4, count: 4 },
+  { start: 8, count: 8 },
+];
 
 export class GameScene extends Phaser.Scene {
-  private state: State = "idle";
-  private countdownTarget: Mode = "listen";
+  private state: State = "countdown";
+  private round = 0;
   private level!: LevelData;
   private playerTaps: boolean[] = [];
   private phaseStartTime = 0;
   private lastHighlight = -1;
   private phaseEndTimer?: Phaser.Time.TimerEvent;
+  private countdownTarget: "listen" | "play" = "listen";
+  private totalMissed = 0;
+  private totalWrong = 0;
 
   private statusText!: Phaser.GameObjects.Text;
   private countdownText!: Phaser.GameObjects.Text;
@@ -99,28 +105,42 @@ export class GameScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
+    this.startNewGame();
+  }
+
+  private get seg(): { start: number; count: number } {
+    return SEGMENTS[this.round];
+  }
+
+  private get segEnd(): number {
+    return this.seg.start + this.seg.count;
+  }
+
+  private get visibleEnd(): number {
+    return this.segEnd;
+  }
+
+  private startNewGame(): void {
+    this.totalMissed = 0;
+    this.totalWrong = 0;
+    this.round = 0;
+    this.level = LevelGenerator.generate();
+    this.playerTaps = new Array(TOTAL_BEATS).fill(false);
     this.enterCountdown("listen");
   }
 
-  private enterIdle(): void {
-    this.state = "idle";
-    this.playerTaps = new Array(TOTAL_BEATS).fill(false);
-    this.lastHighlight = -1;
-    this.phaseStartTime = 0;
-    this.countdownText.setAlpha(0);
-    this.statusText.setText("Trykk for å starte");
-    this.renderButton();
-    this.drawGrid();
+  private scheduleCountInBeats(start: number): void {
+    for (let i = 0; i < COUNT_IN; i++) {
+      const t = start + i * BEAT;
+      audio.scheduleRim(t, i === 0);
+    }
   }
 
-  private scheduleBeats(
-    start: number,
-    count: number,
-    snareAt: ((i: number) => boolean) | null,
-  ): void {
+  private scheduleBeats(start: number, count: number, offset: number): void {
     for (let i = 0; i < count; i++) {
       const t = start + i * BEAT;
-      if (snareAt && snareAt(i)) {
+      const seqIdx = offset + i;
+      if (this.level.sequence[seqIdx]) {
         audio.scheduleSnare(t);
       } else {
         audio.scheduleRim(t, i % 4 === 0);
@@ -128,112 +148,117 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private enterCountdown(target: Mode): void {
+  private enterCountdown(target: "listen" | "play"): void {
     this.state = "countdown";
     this.countdownTarget = target;
     this.lastHighlight = -1;
+    this.renderButton();
+    this.drawGrid();
 
     if (target === "listen") {
-      this.level = LevelGenerator.generate();
-      this.playerTaps = new Array(TOTAL_BEATS).fill(false);
       this.statusText.setText("LYTT!");
       const start = audio.currentTime + 0.05;
       this.phaseStartTime = start;
-      this.scheduleBeats(start, COUNT_IN, null);
+      this.scheduleCountInBeats(start);
       const next = start + COUNT_IN * BEAT;
       this.phaseEndTimer = this.time.delayedCall(COUNT_IN * BEAT * 1000, () => {
         this.countdownText.setAlpha(0);
         this.enterListening(next);
       });
     } else {
-      this.playerTaps = new Array(TOTAL_BEATS).fill(false);
       this.statusText.setText("Din tur!");
-      const start = this.phaseStartTime + LISTEN_DURATION;
+      const start = this.phaseStartTime + this.seg.count * BEAT;
       this.phaseStartTime = start;
-      this.scheduleBeats(start, COUNT_IN, null);
+      this.scheduleCountInBeats(start);
       const next = start + COUNT_IN * BEAT;
       this.phaseEndTimer = this.time.delayedCall(COUNT_IN * BEAT * 1000, () => {
         this.countdownText.setAlpha(0);
         this.enterPlaying(next);
       });
     }
-
-    this.renderButton();
-    this.drawGrid();
   }
 
   private enterListening(start: number): void {
     this.state = "listening";
     this.lastHighlight = -1;
-
     this.phaseStartTime = start;
     this.renderButton();
-    this.scheduleBeats(start, TOTAL_BEATS, (i) => this.level.sequence[i]);
+    this.scheduleBeats(start, this.seg.count, this.seg.start);
 
-    this.phaseEndTimer = this.time.delayedCall(LISTEN_DURATION * 1000, () => {
-      this.enterCountdown("play");
-    });
+    this.phaseEndTimer = this.time.delayedCall(
+      this.seg.count * BEAT * 1000,
+      () => {
+        this.enterCountdown("play");
+      },
+    );
   }
 
   private enterPlaying(start: number): void {
     this.state = "playing";
     this.lastHighlight = -1;
-
     this.phaseStartTime = start;
     this.renderButton();
-    this.scheduleBeats(start, TOTAL_BEATS, null);
+    this.scheduleBeats(start, this.seg.count, this.seg.start);
 
-    this.phaseEndTimer = this.time.delayedCall(PLAY_DURATION * 1000, () => {
-      this.enterResult();
-    });
+    this.phaseEndTimer = this.time.delayedCall(
+      this.seg.count * BEAT * 1000,
+      () => {
+        this.scoreRound();
+      },
+    );
   }
 
-  private enterResult(): void {
-    this.state = "result";
-
+  private scoreRound(): void {
     const seq = this.level.sequence;
     const taps = this.playerTaps;
+    const { start, count } = this.seg;
     let missed = 0;
     let wrong = 0;
 
-    for (let i = 0; i < TOTAL_BEATS; i++) {
+    for (let i = start; i < start + count; i++) {
       if (seq[i] && !taps[i]) missed++;
       if (!seq[i] && taps[i]) wrong++;
     }
 
-    const score = Math.max(0, 16 - missed - wrong);
+    this.totalMissed += missed;
+    this.totalWrong += wrong;
 
-    if (score === 16) {
-      this.statusText.setText(`Perfekt! 16/16`);
-    } else if (score >= 10) {
-      this.statusText.setText(`${score}/16  (${missed} bom, ${wrong} feil)`);
-    } else {
-      this.statusText.setText(`${score}/16  (${missed} bom, ${wrong} feil)`);
-      audio.scheduleBuzz(audio.currentTime + 0.05);
-    }
-
-    this.drawGrid();
-    this.renderButton();
-  }
-
-  private onTapDown(): void {
-    if (this.state === "idle") {
+    if (this.round < SEGMENTS.length - 1) {
+      this.round++;
       this.enterCountdown("listen");
       return;
     }
 
-    if (this.state === "result") {
-      this.enterCountdown("listen");
+    this.state = "finalResult";
+    const score = Math.max(0, TOTAL_BEATS - this.totalMissed - this.totalWrong);
+    if (score === 16) {
+      this.statusText.setText(`Perfekt! 16/16`);
+    } else {
+      this.statusText.setText(`${score}/16  (${this.totalMissed} bom, ${this.totalWrong} feil)`);
+      audio.scheduleBuzz(audio.currentTime + 0.05);
+    }
+
+    this.renderButton();
+    this.drawGrid();
+  }
+
+  private onTapDown(): void {
+    if (this.state === "finalResult") {
+      this.startNewGame();
       return;
     }
 
     if (this.state === "playing") {
       const elapsed = audio.currentTime - this.phaseStartTime;
       const rawBeat = elapsed / BEAT;
-      const beat = Math.round(rawBeat);
+      const beat = Math.round(rawBeat) + this.seg.start;
 
-      if (beat >= 0 && beat < TOTAL_BEATS && !this.playerTaps[beat]) {
-        const diff = Math.abs(rawBeat - beat);
+      if (
+        beat >= this.seg.start &&
+        beat < this.segEnd &&
+        !this.playerTaps[beat]
+      ) {
+        const diff = Math.abs(rawBeat - Math.round(rawBeat));
         if (diff < 0.35) {
           this.playerTaps[beat] = true;
           audio.playSnareNow();
@@ -277,7 +302,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onTapUp(): void {
-    if (this.state === "playing" || this.state === "idle") {
+    if (this.state === "playing") {
       this.renderButton();
     }
   }
@@ -301,8 +326,13 @@ export class GameScene extends Phaser.Scene {
       const beat = Math.floor(elapsed / BEAT);
       if (beat !== this.lastHighlight) {
         this.lastHighlight = beat;
-        if (this.state === "listening" && beat >= 0 && beat < TOTAL_BEATS && this.level.sequence[beat]) {
-          this.showHitEffect(beat);
+        if (
+          this.state === "listening" &&
+          beat >= 0 &&
+          beat < this.seg.count &&
+          this.level.sequence[this.seg.start + beat]
+        ) {
+          this.showHitEffect(this.seg.start + beat);
         }
         this.drawGrid();
       }
@@ -318,28 +348,21 @@ export class GameScene extends Phaser.Scene {
     for (let bar = 0; bar < 4; bar++) {
       for (let beat = 0; beat < 4; beat++) {
         const idx = bar * 4 + beat;
+
+        if (idx >= this.visibleEnd) {
+          continue;
+        }
+
         const x = this.gridX + beat * (s + gap);
         const y = this.gridY + bar * (s + gap);
 
-        let color: number = colors.tile;
-        let alpha = 0.5;
+        const inPreviousSeg = idx < this.seg.start;
+        const inCurrentSeg = idx >= this.seg.start && idx < this.segEnd;
 
-        if (this.state === "listening" && idx === this.lastHighlight) {
-          if (this.level.sequence[idx]) {
-            color = colors.accent;
-            alpha = 1;
-          } else {
-            color = colors.error;
-            alpha = 0.5;
-          }
-        }
+        let color: number;
+        let alpha: number;
 
-        if (this.state === "playing" && this.playerTaps[idx]) {
-          color = colors.accent;
-          alpha = 1;
-        }
-
-        if (this.state === "result") {
+        if (this.state === "finalResult") {
           const seq = this.level.sequence[idx];
           const tap = this.playerTaps[idx];
           if (seq && tap) {
@@ -355,6 +378,46 @@ export class GameScene extends Phaser.Scene {
             color = colors.tile;
             alpha = 0.4;
           }
+        } else if (inPreviousSeg) {
+          const seq = this.level.sequence[idx];
+          const tap = this.playerTaps[idx];
+          if (seq && tap) {
+            color = colors.accent;
+            alpha = 1;
+          } else if (seq && !tap) {
+            color = colors.error;
+            alpha = 1;
+          } else if (!seq && tap) {
+            color = colors.error;
+            alpha = 0.6;
+          } else {
+            color = colors.tile;
+            alpha = 0.4;
+          }
+        } else if (
+          this.state === "listening" &&
+          inCurrentSeg &&
+          idx === this.seg.start + this.lastHighlight
+        ) {
+          if (this.level.sequence[idx]) {
+            color = colors.accent;
+            alpha = 1;
+          } else {
+            color = colors.error;
+            alpha = 0.5;
+          }
+        } else {
+          color = colors.tile;
+          alpha = 0.5;
+        }
+
+        if (
+          this.state === "playing" &&
+          inCurrentSeg &&
+          this.playerTaps[idx]
+        ) {
+          color = colors.accent;
+          alpha = 1;
         }
 
         const cx = x + s / 2;
@@ -369,7 +432,8 @@ export class GameScene extends Phaser.Scene {
 
         if (
           (this.state === "listening" || this.state === "playing") &&
-          idx === this.lastHighlight
+          inCurrentSeg &&
+          idx === this.seg.start + this.lastHighlight
         ) {
           g.lineStyle(2, colors.white, 0.7);
           g.strokeCircle(cx, cy, r);
@@ -382,7 +446,7 @@ export class GameScene extends Phaser.Scene {
     const g = this.btnGraphics;
     g.clear();
     const btnColor =
-      this.state === "idle" || this.state === "playing"
+      this.state === "playing" || this.state === "finalResult"
         ? colors.accent
         : colors.error;
     g.fillStyle(colors.tileShadow, 1);
@@ -390,21 +454,18 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(btnColor, 1);
     g.fillCircle(this.btnCX, this.btnCY, this.btnW / 2);
 
-    if (this.state === "idle") {
-      this.tapLabel.setText("START");
-      this.tapLabel.setColor(colors.textWhite);
-    } else if (this.state === "playing") {
+    if (this.state === "playing") {
       this.tapLabel.setText("TRYKK");
       this.tapLabel.setColor(colors.textWhite);
-    } else if (this.state === "result") {
+    } else if (this.state === "finalResult") {
       this.tapLabel.setText("IGJEN");
       this.tapLabel.setColor(colors.textWhite);
     } else if (this.state === "countdown" && this.countdownTarget === "play") {
       this.tapLabel.setText("KLAR?");
       this.tapLabel.setColor(colors.textWhite);
     } else {
-      this.tapLabel.setText("LYTT");
-      this.tapLabel.setColor(colors.textWhite);
+      this.tapLabel.setText("...");
+      this.tapLabel.setColor(colors.textDisabled);
     }
   }
 }
