@@ -4,7 +4,7 @@ export const colors = {
   tile: 0x0090a0,
   tileDim: 0x0090a0,
   tileShadow: 0x15152e,
-  accent: 0x12c4a7,
+  accent: 0x00c4d8,
   error: 0xff7461,
   white: 0xffffff,
   textMuted: "#555577",

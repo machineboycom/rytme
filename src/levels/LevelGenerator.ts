@@ -28,10 +28,10 @@ export class LevelGenerator {
 
 function dateSeed(): number {
   const d = new Date();
-  // return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+  return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
   // return Math.random() * 10000;
   // randomize per 10 minutes
-  return Math.floor(d.getTime() / (10 * 60 * 1000));
+  // return Math.floor(d.getTime() / (10 * 60 * 1000));
 }
 
 function mulberry32(seed: number): () => number {
