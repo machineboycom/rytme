@@ -12,7 +12,7 @@ export class LevelGenerator {
     const sequence = new Array(16).fill(false);
 
     for (let bar = 0; bar < 4; bar++) {
-      const count = Math.floor(rng() * 4) + 1;
+      const count = Math.floor(rng() * 3) + 1;
       const positions = pickN(rng, 4, count);
       for (const pos of positions) {
         sequence[bar * 4 + pos] = true;

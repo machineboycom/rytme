@@ -42,6 +42,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
+    audio.setScene(this);
     const { width, height } = this.scale;
     this.cameras.main.setBackgroundColor(colors.bg);
 
@@ -300,7 +301,12 @@ export class GameScene extends Phaser.Scene {
       const beat = Math.floor(elapsed / BEAT);
       if (beat !== this.lastHighlight) {
         this.lastHighlight = beat;
-        if (this.state === "listening" && beat >= 0 && beat < TOTAL_BEATS && this.level.sequence[beat]) {
+        if (
+          this.state === "listening" &&
+          beat >= 0 &&
+          beat < TOTAL_BEATS &&
+          this.level.sequence[beat]
+        ) {
           this.showHitEffect(beat);
         }
         this.drawGrid();
@@ -398,9 +404,12 @@ export class GameScene extends Phaser.Scene {
     } else if (this.state === "result") {
       this.tapLabel.setText("IGJEN");
       this.tapLabel.setColor(colors.textWhite);
+    } else if (this.state === "countdown" && this.countdownTarget === "play") {
+      this.tapLabel.setText("KLAR?");
+      this.tapLabel.setColor(colors.textWhite);
     } else {
-      this.tapLabel.setText("...");
-      this.tapLabel.setColor(colors.textDisabled);
+      this.tapLabel.setText("LYTT");
+      this.tapLabel.setColor(colors.textWhite);
     }
   }
 }

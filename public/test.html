@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Phaser Audio Test</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #111; display: flex; justify-content: center; align-items: center; height: 100vh; flex-direction: column; gap: 20px; }
+    button {
+      font-family: Arial, sans-serif;
+      font-size: 24px; font-weight: bold; color: #fff;
+      background: #4a8; border: none; border-radius: 12px;
+      padding: 16px 40px; cursor: pointer;
+    }
+    #log { color: #888; font-family: monospace; font-size: 14px; white-space: pre; max-height: 400px; overflow: auto; width: 80%; }
+  </style>
+</head>
+<body>
+  <div>
+    <button id="playBtn">PLAY SNARE</button>
+    <button id="testBtn">TEST TONE</button>
+  </div>
+  <div id="log"></div>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+  <script>
+    const log = document.getElementById('log')
+    function info(msg) { log.textContent += msg + '\n'; console.log(msg) }
+
+    const config = {
+      type: Phaser.AUTO,
+      width: 1, height: 1,
+      scene: {
+        preload() {
+          info('Loading audio/snare1.wav ...')
+          this.load.audio('snare1', 'audio/snare1.wav')
+        },
+        create() {
+          info('Scene created')
+          const sm = this.sound
+          info('Sound manager: ' + (sm instanceof Phaser.Sound.WebAudioSoundManager ? 'WebAudio' : sm.constructor.name))
+          const ctx = sm.context
+          info('AudioContext state: ' + (ctx ? ctx.state : 'NO CONTEXT'))
+
+          this.time.delayedCall(500, () => {
+            info('Audio cache keys: ' + this.cache.audio.keys().join(', '))
+            const entry = this.cache.audio.get('snare1')
+            info('Cache entry: ' + (entry ? 'found (duration=' + entry.duration?.toFixed(3) + 's)' : 'MISSING'))
+          })
+
+          document.getElementById('playBtn').onclick = () => {
+            info('Playing snare1...')
+            try {
+              this.sound.play('snare1', { volume: 1 })
+            } catch(e) { info('Error: ' + e.message) }
+          }
+
+          document.getElementById('testBtn').onclick = () => {
+            info('Playing test tone...')
+            try {
+              const osc = ctx.createOscillator()
+              osc.type = 'sine'
+              osc.frequency.value = 440
+              osc.connect(ctx.destination)
+              osc.start(ctx.currentTime)
+              osc.stop(ctx.currentTime + 0.2)
+            } catch(e) { info('Error: ' + e.message) }
+          }
+        }
+      }
+    }
+    info('Creating Phaser game...')
+    new Phaser.Game(config)
+  </script>
+</body>
+</html>
