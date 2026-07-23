@@ -7,7 +7,7 @@ const BPM = 100;
 const TOTAL_BEATS = 16;
 const COUNT_IN = 4;
 
-type State = "countdown" | "listening" | "playing" | "finalResult";
+type State = "intro" | "countdown" | "listening" | "playing" | "finalResult";
 
 const SEGMENTS = [
   { start: 0, count: 4 },
@@ -33,7 +33,6 @@ export class GameScene extends Phaser.Scene {
   // private statusText!: Phaser.GameObjects.Text;
   private countdownText!: Phaser.GameObjects.Text;
   private tapLabel!: Phaser.GameObjects.Text;
-  private infoText!: Phaser.GameObjects.Text;
   private resultText!: Phaser.GameObjects.Text;
   private retryBtnGraphics!: Phaser.GameObjects.Graphics;
   private retryBtnLabel!: Phaser.GameObjects.Text;
@@ -104,18 +103,10 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setAlpha(0);
 
-    this.infoText = this.add
-      .text(width / 2, height - 20, "prototype 1.0.1b", {
-        fontFamily: "Arial, sans-serif",
-        fontSize: "13px",
-        color: colors.textMuted,
-      })
-      .setOrigin(0.5);
-
     this.resultText = this.add
       .text(this.btnCX, this.btnCY - 50, "", {
         fontFamily: "Arial, sans-serif",
-        fontSize: "28px",
+        fontSize: "18px",
         color: colors.textWhite,
         fontStyle: "bold",
         align: "center",
@@ -136,7 +127,7 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setAlpha(0);
 
-    this.startNewGame();
+    this.startIntro();
   }
 
   private get seg(): { start: number; count: number } {
@@ -164,6 +155,24 @@ export class GameScene extends Phaser.Scene {
     this.playerTaps = new Array(TOTAL_BEATS).fill(false);
     this.tapAccuracy = new Array(TOTAL_BEATS).fill(-1);
     this.enterCountdown("listen");
+  }
+
+  private startIntro(): void {
+    this.state = "intro";
+    this.resultRevealIndex = 0;
+    this.renderButton();
+    this.drawGrid();
+    this.time.addEvent({
+      delay: 100,
+      repeat: 3,
+      callback: () => {
+        this.resultRevealIndex++;
+        this.drawGrid();
+        if (this.resultRevealIndex >= 4) {
+          this.startNewGame();
+        }
+      },
+    });
   }
 
   private scheduleCountInBeats(
@@ -225,7 +234,7 @@ export class GameScene extends Phaser.Scene {
       // this.statusText.setText("LYTT!");
       const start = audio.currentTime + 0.05;
       this.phaseStartTime = start;
-      const count = this.seg.count;
+      const count = COUNT_IN;
       this.scheduleCountInBeats(start, "listen", count);
       const next = start + count * this.b;
       this.phaseEndTimer = this.time.delayedCall(count * this.b * 1000, () => {
@@ -236,10 +245,9 @@ export class GameScene extends Phaser.Scene {
       // this.statusText.setText("Gjør deg klar!");
       const start = this.phaseStartTime + this.seg.count * this.b;
       this.phaseStartTime = start;
-      const count = this.seg.count;
-      this.scheduleCountInBeats(start, "play", count);
-      const next = start + count * this.b;
-      this.phaseEndTimer = this.time.delayedCall(count * this.b * 1000, () => {
+      this.scheduleCountInBeats(start, "play", COUNT_IN);
+      const next = start + COUNT_IN * this.b;
+      this.phaseEndTimer = this.time.delayedCall(COUNT_IN * this.b * 1000, () => {
         this.countdownText.setAlpha(0);
         this.enterPlaying(next);
       });
@@ -322,10 +330,12 @@ export class GameScene extends Phaser.Scene {
           let accuracyTotal = 0;
           for (let i = 0; i < TOTAL_BEATS; i++) {
             if (this.level.sequence[i] && this.playerTaps[i]) {
-              accuracyTotal += Math.max(
+              const bonus = Math.max(
                 0,
-                Math.round(100 * (1 - Math.abs(this.tapAccuracy[i]) / 200)),
+                Math.round(100 * (1 - Math.abs(this.tapAccuracy[i]) / 100)),
               );
+              console.log(`Beat ${i}: ${this.tapAccuracy[i].toFixed(1)}ms → ${bonus} poeng`);
+              accuracyTotal += bonus;
             }
           }
           const totalScore = correctHits * 1000 + accuracyTotal;
@@ -419,7 +429,7 @@ export class GameScene extends Phaser.Scene {
     if (this.state === "countdown") {
       const elapsed = audio.currentTime - this.phaseStartTime;
       const beat = Math.floor(elapsed / this.b);
-      const count = this.seg.count;
+      const count = COUNT_IN;
       if (beat >= 0 && beat < count) {
         if (this.countdownTarget === "play") {
           const num = count - beat;
@@ -463,6 +473,10 @@ export class GameScene extends Phaser.Scene {
         const idx = bar * 4 + beat;
 
         if (idx >= this.visibleEnd) {
+          continue;
+        }
+
+        if (this.state === "intro" && idx >= this.resultRevealIndex) {
           continue;
         }
 
@@ -589,7 +603,11 @@ export class GameScene extends Phaser.Scene {
     this.retryBtnGraphics.setAlpha(0);
     this.retryBtnLabel.setAlpha(0);
 
-    const btnColor = this.state === "playing" ? colors.accent : colors.disabled;
+    const btnColor =
+      this.state === "playing" ||
+      (this.state === "countdown" && this.countdownTarget === "listen")
+        ? colors.accent
+        : colors.disabled;
     g.fillStyle(colors.tileShadow, 1);
     g.fillCircle(this.btnCX, this.btnCY + 16, this.btnW / 2);
     g.fillStyle(btnColor, 1);
@@ -601,8 +619,11 @@ export class GameScene extends Phaser.Scene {
     } else if (this.state === "countdown" && this.countdownTarget === "play") {
       this.tapLabel.setText("KLAR?");
       this.tapLabel.setColor(colors.textWhite);
-    } else {
+    } else if (this.state === "countdown") {
       this.tapLabel.setText("LYTT");
+      this.tapLabel.setColor(colors.textWhite);
+    } else {
+      this.tapLabel.setText("");
       this.tapLabel.setColor(colors.textDisabled);
     }
   }
