@@ -105,7 +105,7 @@ export class GameScene extends Phaser.Scene {
       .setAlpha(0);
 
     this.infoText = this.add
-      .text(width / 2, height - 20, "prototype 1.0b", {
+      .text(width / 2, height - 20, "prototype 1.0.1b", {
         fontFamily: "Arial, sans-serif",
         fontSize: "13px",
         color: colors.textMuted,
@@ -321,10 +321,10 @@ export class GameScene extends Phaser.Scene {
           );
           let accuracyTotal = 0;
           for (let i = 0; i < TOTAL_BEATS; i++) {
-            if (this.level.sequence[i] && this.tapAccuracy[i] >= 0) {
+            if (this.level.sequence[i] && this.playerTaps[i]) {
               accuracyTotal += Math.max(
                 0,
-                Math.round(100 * (1 - this.tapAccuracy[i] / 200)),
+                Math.round(100 * (1 - Math.abs(this.tapAccuracy[i]) / 200)),
               );
             }
           }
@@ -366,7 +366,8 @@ export class GameScene extends Phaser.Scene {
         const diff = Math.abs(rawBeat - Math.round(rawBeat));
         if (diff < 0.35) {
           this.playerTaps[beat] = true;
-          this.tapAccuracy[beat] = diff * this.b * 1000;
+          this.tapAccuracy[beat] =
+            (rawBeat - Math.round(rawBeat)) * this.b * 1000;
           console.log(this.tapAccuracy[beat]);
           audio.playSnareNow();
           if (this.level.sequence[beat]) {
@@ -535,9 +536,12 @@ export class GameScene extends Phaser.Scene {
           this.playerTaps[idx] &&
           this.level.sequence[idx]
         ) {
-          const fill = Math.max(0.1, 1 - 0.9 * (this.tapAccuracy[idx] / 100));
+          const offsetMs = this.tapAccuracy[idx];
+          const absMs = Math.abs(offsetMs);
+          const fill = Math.max(0.1, 1 - 0.9 * (absMs / 100));
+          const shift = Phaser.Math.Clamp(offsetMs / 100, -1, 1) * r * 0.6;
           g.fillStyle(colors.white, 0.8);
-          g.fillCircle(cx, cy, r * fill);
+          g.fillCircle(cx + shift, cy, r * fill);
         }
 
         if (
@@ -570,9 +574,9 @@ export class GameScene extends Phaser.Scene {
         const rg = this.retryBtnGraphics;
         rg.clear();
         rg.fillStyle(colors.tileShadow, 1);
-        rg.fillRoundedRect(rx, ry + 3, rw, rh, 8);
+        rg.fillRoundedRect(rx, ry + 3, rw, rh, 24);
         rg.fillStyle(colors.accent, 1);
-        rg.fillRoundedRect(rx, ry, rw, rh, 8);
+        rg.fillRoundedRect(rx, ry, rw, rh, 24);
       } else {
         this.resultText.setAlpha(0);
         this.retryBtnGraphics.setAlpha(0);
