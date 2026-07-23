@@ -38,6 +38,7 @@ export class GameScene extends Phaser.Scene {
   private retryBtnGraphics!: Phaser.GameObjects.Graphics;
   private retryBtnLabel!: Phaser.GameObjects.Text;
   private btnGraphics!: Phaser.GameObjects.Graphics;
+  private btnFlashGraphics!: Phaser.GameObjects.Graphics;
   private gridGraphics!: Phaser.GameObjects.Graphics;
 
   private cellSize = 0;
@@ -71,6 +72,7 @@ export class GameScene extends Phaser.Scene {
     this.btnCY = this.gridY + gridH + 60 + this.btnH / 2;
 
     this.btnGraphics = this.add.graphics();
+    this.btnFlashGraphics = this.add.graphics();
 
     this.input.on("pointerdown", () => this.onTapDown());
     this.input.on("pointerup", () => this.onTapUp());
@@ -103,7 +105,7 @@ export class GameScene extends Phaser.Scene {
       .setAlpha(0);
 
     this.infoText = this.add
-      .text(width / 2, height - 20, "rytme", {
+      .text(width / 2, height - 20, "prototype 1.0b", {
         fontFamily: "Arial, sans-serif",
         fontSize: "13px",
         color: colors.textMuted,
@@ -111,7 +113,7 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.resultText = this.add
-      .text(this.btnCX, this.btnCY, "", {
+      .text(this.btnCX, this.btnCY - 50, "", {
         fontFamily: "Arial, sans-serif",
         fontSize: "28px",
         color: colors.textWhite,
@@ -171,8 +173,27 @@ export class GameScene extends Phaser.Scene {
   ): void {
     for (let i = 0; i < count; i++) {
       const t = start + i * this.b;
+      this.scheduleButtonFlash(t);
       audio.scheduleVoice("rim2", t);
     }
+  }
+
+  private scheduleButtonFlash(when: number): void {
+    const delay = Math.max(0, when - audio.currentTime);
+    this.time.delayedCall(delay * 1000, () => {
+      const g = this.btnFlashGraphics;
+      g.clear();
+      g.setAlpha(1);
+      g.lineStyle(2, colors.white, 0.8);
+      g.strokeCircle(this.btnCX, this.btnCY, this.btnW / 2);
+      this.tweens.add({
+        targets: g,
+        alpha: 0,
+        duration: this.b * 500,
+        ease: "Quad.easeOut",
+        onComplete: () => g.clear(),
+      });
+    });
   }
 
   private scheduleBeats(
@@ -183,6 +204,7 @@ export class GameScene extends Phaser.Scene {
   ): void {
     for (let i = 0; i < count; i++) {
       const t = start + i * this.b;
+      this.scheduleButtonFlash(t);
       const seqIdx = offset + i;
       if (playSnares && this.level.sequence[seqIdx]) {
         audio.scheduleSnare(t);
@@ -293,22 +315,27 @@ export class GameScene extends Phaser.Scene {
         }
         this.drawGrid();
         if (this.resultRevealIndex >= TOTAL_BEATS) {
-          const score = Math.max(
+          const correctHits = Math.max(
             0,
             TOTAL_BEATS - this.totalMissed - this.totalWrong,
           );
           let accuracyTotal = 0;
           for (let i = 0; i < TOTAL_BEATS; i++) {
             if (this.level.sequence[i] && this.tapAccuracy[i] >= 0) {
-              accuracyTotal += Math.max(0, Math.round(100 * (1 - this.tapAccuracy[i] / 200)));
+              accuracyTotal += Math.max(
+                0,
+                Math.round(100 * (1 - this.tapAccuracy[i] / 200)),
+              );
             }
           }
-          const accText = `\nNøyaktighetsbonus: ${accuracyTotal} poeng`;
-          if (score === 16) {
-            this.resultText.setText(`Perfekt! 16/16${accText}`);
+          const totalScore = correctHits * 1000 + accuracyTotal;
+          if (correctHits === 16) {
+            this.resultText.setText(
+              `Perfekt!\nNøyaktighetsbonus: ${accuracyTotal} poeng\nTotalt: ${totalScore} poeng`,
+            );
           } else {
             this.resultText.setText(
-              `${score}/16  (${this.totalMissed} bom, ${this.totalWrong} feil)${accText}`,
+              `Du klarte ${correctHits}/16\nNøyaktighetsbonus: ${accuracyTotal} poeng\nTotalt: ${totalScore} poeng`,
             );
             audio.scheduleBuzz(audio.currentTime + 0.05);
           }
@@ -504,6 +531,16 @@ export class GameScene extends Phaser.Scene {
         g.fillCircle(cx, cy, r);
 
         if (
+          this.state === "finalResult" &&
+          this.playerTaps[idx] &&
+          this.level.sequence[idx]
+        ) {
+          const fill = Math.max(0.1, 1 - 0.9 * (this.tapAccuracy[idx] / 100));
+          g.fillStyle(colors.white, 0.8);
+          g.fillCircle(cx, cy, r * fill);
+        }
+
+        if (
           (this.state === "listening" || this.state === "playing") &&
           inCurrentSeg &&
           idx === this.seg.start + this.lastHighlight
@@ -548,10 +585,7 @@ export class GameScene extends Phaser.Scene {
     this.retryBtnGraphics.setAlpha(0);
     this.retryBtnLabel.setAlpha(0);
 
-    const btnColor =
-      this.state === "playing"
-        ? colors.accent
-        : colors.disabled;
+    const btnColor = this.state === "playing" ? colors.accent : colors.disabled;
     g.fillStyle(colors.tileShadow, 1);
     g.fillCircle(this.btnCX, this.btnCY + 16, this.btnW / 2);
     g.fillStyle(btnColor, 1);

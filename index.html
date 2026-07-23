@@ -38,13 +38,22 @@
         -webkit-user-select: none;
         user-select: none;
       }
-      #overlay h1 {
+      #date-text {
         font-family: Arial, sans-serif;
-        font-size: clamp(64px, 10vw, 128px);
-        font-weight: bold;
+        font-size: clamp(14px, 2.5vw, 22px);
+        color: #8888aa;
+        margin-bottom: 16px;
+      }
+      #info {
+        font-family: Arial, sans-serif;
+        font-size: clamp(14px, 2.5vw, 22px);
         color: #f0f0f0;
+        text-align: center;
         margin-bottom: 40px;
-        letter-spacing: 6px;
+      }
+      #rytme-logo {
+        width: clamp(180px, 40vw, 360px);
+        margin-bottom: 40px;
       }
       #start-btn {
         font-family: Arial, sans-serif;
@@ -69,9 +78,28 @@
   </head>
   <body>
     <div id="overlay">
-      <h1>RYTME</h1>
+      <p id="date-text"></p>
+      <img id="rytme-logo" src="/rytme.svg" alt="rytme" />
+      <div id="info">
+        <p>Følg med på rytmen og gjenta den!</p>
+        <p>Ny rytme hver dag!</p>
+      </div>
       <button id="start-btn">START</button>
     </div>
+    <script>
+      const d = new Date();
+      const parts = d
+        .toLocaleDateString("nb-NO", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+        })
+        .split(" ");
+      parts[0] = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+      document.getElementById("date-text").textContent = parts
+        .join(" ")
+        .replace(". ", ".");
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
