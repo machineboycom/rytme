@@ -43,6 +43,11 @@ export class LowLatencyAudio {
     this.playSnareAt(this.currentTime)
   }
 
+  scheduleVoice(key: string, time: number): void {
+    const delay = Math.max(0, time - this.currentTime)
+    this.getSound().play(key, { delay, volume: 1 })
+  }
+
   scheduleBuzz(time: number): void {
     const delay = Math.max(0, time - this.currentTime)
     this.getSound().play('rim', {

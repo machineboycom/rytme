@@ -4,7 +4,6 @@ import { LevelGenerator, type LevelData } from "../levels/LevelGenerator";
 import { colors } from "../theme";
 
 const BPM = 120;
-const BEAT = 60 / BPM;
 const TOTAL_BEATS = 16;
 const COUNT_IN = 4;
 
@@ -120,6 +119,10 @@ export class GameScene extends Phaser.Scene {
     return this.segEnd;
   }
 
+  private get b(): number {
+    return 60 / (this.round >= 1 ? BPM * 2 : BPM);
+  }
+
   private startNewGame(): void {
     this.totalMissed = 0;
     this.totalWrong = 0;
@@ -129,18 +132,18 @@ export class GameScene extends Phaser.Scene {
     this.enterCountdown("listen");
   }
 
-  private scheduleCountInBeats(start: number): void {
-    for (let i = 0; i < COUNT_IN; i++) {
-      const t = start + i * BEAT;
-      audio.scheduleRim(t, i === 0);
+  private scheduleCountInBeats(start: number, target: "listen" | "play", count: number): void {
+    for (let i = 0; i < count; i++) {
+      const t = start + i * this.b;
+      audio.scheduleVoice("rim2", t);
     }
   }
 
-  private scheduleBeats(start: number, count: number, offset: number): void {
+  private scheduleBeats(start: number, count: number, offset: number, playSnares = true): void {
     for (let i = 0; i < count; i++) {
-      const t = start + i * BEAT;
+      const t = start + i * this.b;
       const seqIdx = offset + i;
-      if (this.level.sequence[seqIdx]) {
+      if (playSnares && this.level.sequence[seqIdx]) {
         audio.scheduleSnare(t);
       } else {
         audio.scheduleRim(t, i % 4 === 0);
@@ -159,19 +162,21 @@ export class GameScene extends Phaser.Scene {
       this.statusText.setText("LYTT!");
       const start = audio.currentTime + 0.05;
       this.phaseStartTime = start;
-      this.scheduleCountInBeats(start);
-      const next = start + COUNT_IN * BEAT;
-      this.phaseEndTimer = this.time.delayedCall(COUNT_IN * BEAT * 1000, () => {
+      const count = this.seg.count;
+      this.scheduleCountInBeats(start, "listen", count);
+      const next = start + count * this.b;
+      this.phaseEndTimer = this.time.delayedCall(count * this.b * 1000, () => {
         this.countdownText.setAlpha(0);
         this.enterListening(next);
       });
     } else {
-      this.statusText.setText("Din tur!");
-      const start = this.phaseStartTime + this.seg.count * BEAT;
+      this.statusText.setText("Gjør deg klar!");
+      const start = this.phaseStartTime + this.seg.count * this.b;
       this.phaseStartTime = start;
-      this.scheduleCountInBeats(start);
-      const next = start + COUNT_IN * BEAT;
-      this.phaseEndTimer = this.time.delayedCall(COUNT_IN * BEAT * 1000, () => {
+      const count = this.seg.count;
+      this.scheduleCountInBeats(start, "play", count);
+      const next = start + count * this.b;
+      this.phaseEndTimer = this.time.delayedCall(count * this.b * 1000, () => {
         this.countdownText.setAlpha(0);
         this.enterPlaying(next);
       });
@@ -186,7 +191,7 @@ export class GameScene extends Phaser.Scene {
     this.scheduleBeats(start, this.seg.count, this.seg.start);
 
     this.phaseEndTimer = this.time.delayedCall(
-      this.seg.count * BEAT * 1000,
+      this.seg.count * this.b * 1000,
       () => {
         this.enterCountdown("play");
       },
@@ -197,11 +202,12 @@ export class GameScene extends Phaser.Scene {
     this.state = "playing";
     this.lastHighlight = -1;
     this.phaseStartTime = start;
+    this.statusText.setText("Din tur!");
     this.renderButton();
-    this.scheduleBeats(start, this.seg.count, this.seg.start);
+    this.scheduleBeats(start, this.seg.count, this.seg.start, false);
 
     this.phaseEndTimer = this.time.delayedCall(
-      this.seg.count * BEAT * 1000,
+      this.seg.count * this.b * 1000,
       () => {
         this.scoreRound();
       },
@@ -250,7 +256,7 @@ export class GameScene extends Phaser.Scene {
 
     if (this.state === "playing") {
       const elapsed = audio.currentTime - this.phaseStartTime;
-      const rawBeat = elapsed / BEAT;
+      const rawBeat = elapsed / this.b;
       const beat = Math.round(rawBeat) + this.seg.start;
 
       if (
@@ -310,10 +316,15 @@ export class GameScene extends Phaser.Scene {
   update(): void {
     if (this.state === "countdown") {
       const elapsed = audio.currentTime - this.phaseStartTime;
-      const beat = Math.floor(elapsed / BEAT);
-      if (beat >= 0 && beat < COUNT_IN) {
-        const num = COUNT_IN - beat;
-        this.countdownText.setText(String(num)).setAlpha(1);
+      const beat = Math.floor(elapsed / this.b);
+      const count = this.seg.count;
+      if (beat >= 0 && beat < count) {
+        if (this.countdownTarget === "play" || count > 4) {
+          const num = count - beat;
+          this.countdownText.setText(String(num)).setAlpha(1);
+        } else {
+          this.countdownText.setText("LYTT").setAlpha(1);
+        }
       }
       if (beat !== this.lastHighlight) {
         this.lastHighlight = beat;
@@ -323,7 +334,7 @@ export class GameScene extends Phaser.Scene {
 
     if (this.state === "listening" || this.state === "playing") {
       const elapsed = audio.currentTime - this.phaseStartTime;
-      const beat = Math.floor(elapsed / BEAT);
+      const beat = Math.floor(elapsed / this.b);
       if (beat !== this.lastHighlight) {
         this.lastHighlight = beat;
         if (
