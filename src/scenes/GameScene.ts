@@ -3,7 +3,7 @@ import { audio } from "../audio/LowLatencyAudio";
 import { LevelGenerator, type LevelData } from "../levels/LevelGenerator";
 import { colors } from "../theme";
 
-const BPM = 120;
+const BPM = 100;
 const TOTAL_BEATS = 16;
 const COUNT_IN = 4;
 
@@ -26,11 +26,16 @@ export class GameScene extends Phaser.Scene {
   private countdownTarget: "listen" | "play" = "listen";
   private totalMissed = 0;
   private totalWrong = 0;
+  private resultRevealIndex = 0;
+  private resultTimer?: Phaser.Time.TimerEvent;
 
-  private statusText!: Phaser.GameObjects.Text;
+  // private statusText!: Phaser.GameObjects.Text;
   private countdownText!: Phaser.GameObjects.Text;
   private tapLabel!: Phaser.GameObjects.Text;
   private infoText!: Phaser.GameObjects.Text;
+  private resultText!: Phaser.GameObjects.Text;
+  private retryBtnGraphics!: Phaser.GameObjects.Graphics;
+  private retryBtnLabel!: Phaser.GameObjects.Text;
   private btnGraphics!: Phaser.GameObjects.Graphics;
   private gridGraphics!: Phaser.GameObjects.Graphics;
 
@@ -79,16 +84,16 @@ export class GameScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    this.statusText = this.add
-      .text(width / 2, 12, "", {
-        fontFamily: "Arial, sans-serif",
-        fontSize: "20px",
-        color: colors.textWhite,
-      })
-      .setOrigin(0.5, 0);
+    // this.statusText = this.add
+    //   .text(width / 2, 12, "", {
+    //     fontFamily: "Arial, sans-serif",
+    //     fontSize: "20px",
+    //     color: colors.textWhite,
+    //   })
+    //   .setOrigin(0.5, 0);
 
     this.countdownText = this.add
-      .text(width / 2, this.gridY + gridH / 2, "", {
+      .text(width / 2, this.gridY + gridH / 1.5, "", {
         fontFamily: "Arial, sans-serif",
         fontSize: "72px",
         color: colors.textWhite,
@@ -103,6 +108,28 @@ export class GameScene extends Phaser.Scene {
         color: colors.textMuted,
       })
       .setOrigin(0.5);
+
+    this.resultText = this.add
+      .text(this.btnCX, this.btnCY, "", {
+        fontFamily: "Arial, sans-serif",
+        fontSize: "28px",
+        color: colors.textWhite,
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5)
+      .setAlpha(0);
+
+    this.retryBtnGraphics = this.add.graphics().setAlpha(0);
+
+    this.retryBtnLabel = this.add
+      .text(this.btnCX, this.btnCY + 55, "PRØV IGJEN", {
+        fontFamily: "Arial, sans-serif",
+        fontSize: "18px",
+        color: colors.textWhite,
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5)
+      .setAlpha(0);
 
     this.startNewGame();
   }
@@ -124,6 +151,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private startNewGame(): void {
+    this.resultTimer?.destroy();
     this.totalMissed = 0;
     this.totalWrong = 0;
     this.round = 0;
@@ -132,14 +160,23 @@ export class GameScene extends Phaser.Scene {
     this.enterCountdown("listen");
   }
 
-  private scheduleCountInBeats(start: number, target: "listen" | "play", count: number): void {
+  private scheduleCountInBeats(
+    start: number,
+    target: "listen" | "play",
+    count: number,
+  ): void {
     for (let i = 0; i < count; i++) {
       const t = start + i * this.b;
       audio.scheduleVoice("rim2", t);
     }
   }
 
-  private scheduleBeats(start: number, count: number, offset: number, playSnares = true): void {
+  private scheduleBeats(
+    start: number,
+    count: number,
+    offset: number,
+    playSnares = true,
+  ): void {
     for (let i = 0; i < count; i++) {
       const t = start + i * this.b;
       const seqIdx = offset + i;
@@ -159,7 +196,7 @@ export class GameScene extends Phaser.Scene {
     this.drawGrid();
 
     if (target === "listen") {
-      this.statusText.setText("LYTT!");
+      // this.statusText.setText("LYTT!");
       const start = audio.currentTime + 0.05;
       this.phaseStartTime = start;
       const count = this.seg.count;
@@ -170,7 +207,7 @@ export class GameScene extends Phaser.Scene {
         this.enterListening(next);
       });
     } else {
-      this.statusText.setText("Gjør deg klar!");
+      // this.statusText.setText("Gjør deg klar!");
       const start = this.phaseStartTime + this.seg.count * this.b;
       this.phaseStartTime = start;
       const count = this.seg.count;
@@ -202,7 +239,7 @@ export class GameScene extends Phaser.Scene {
     this.state = "playing";
     this.lastHighlight = -1;
     this.phaseStartTime = start;
-    this.statusText.setText("Din tur!");
+    // this.statusText.setText("Din tur!");
     this.renderButton();
     this.scheduleBeats(start, this.seg.count, this.seg.start, false);
 
@@ -236,21 +273,45 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.state = "finalResult";
-    const score = Math.max(0, TOTAL_BEATS - this.totalMissed - this.totalWrong);
-    if (score === 16) {
-      this.statusText.setText(`Perfekt! 16/16`);
-    } else {
-      this.statusText.setText(`${score}/16  (${this.totalMissed} bom, ${this.totalWrong} feil)`);
-      audio.scheduleBuzz(audio.currentTime + 0.05);
-    }
-
+    this.resultRevealIndex = 0;
+    // this.statusText.setText("");
     this.renderButton();
     this.drawGrid();
+
+    this.resultTimer = this.time.addEvent({
+      delay: 100,
+      repeat: TOTAL_BEATS - 1,
+      callback: () => {
+        this.resultRevealIndex++;
+        const revealed = this.resultRevealIndex - 1;
+        if (this.level.sequence[revealed] && this.playerTaps[revealed]) {
+          this.showHitEffect(revealed);
+        }
+        this.drawGrid();
+        if (this.resultRevealIndex >= TOTAL_BEATS) {
+          const score = Math.max(
+            0,
+            TOTAL_BEATS - this.totalMissed - this.totalWrong,
+          );
+          if (score === 16) {
+            this.resultText.setText(`Perfekt! 16/16`);
+          } else {
+            this.resultText.setText(
+              `${score}/16  (${this.totalMissed} bom, ${this.totalWrong} feil)`,
+            );
+            audio.scheduleBuzz(audio.currentTime + 0.05);
+          }
+          this.renderButton();
+        }
+      },
+    });
   }
 
   private onTapDown(): void {
     if (this.state === "finalResult") {
-      this.startNewGame();
+      if (this.resultRevealIndex >= TOTAL_BEATS) {
+        this.startNewGame();
+      }
       return;
     }
 
@@ -319,7 +380,7 @@ export class GameScene extends Phaser.Scene {
       const beat = Math.floor(elapsed / this.b);
       const count = this.seg.count;
       if (beat >= 0 && beat < count) {
-        if (this.countdownTarget === "play" || count > 4) {
+        if (this.countdownTarget === "play") {
           const num = count - beat;
           this.countdownText.setText(String(num)).setAlpha(1);
         } else {
@@ -374,37 +435,29 @@ export class GameScene extends Phaser.Scene {
         let alpha: number;
 
         if (this.state === "finalResult") {
-          const seq = this.level.sequence[idx];
-          const tap = this.playerTaps[idx];
-          if (seq && tap) {
-            color = colors.accent;
-            alpha = 1;
-          } else if (seq && !tap) {
-            color = colors.error;
-            alpha = 1;
-          } else if (!seq && tap) {
-            color = colors.error;
-            alpha = 0.6;
+          if (idx < this.resultRevealIndex) {
+            const seq = this.level.sequence[idx];
+            const tap = this.playerTaps[idx];
+            if (seq && tap) {
+              color = colors.accent;
+              alpha = 1;
+            } else if (seq && !tap) {
+              color = colors.error;
+              alpha = 1;
+            } else if (!seq && tap) {
+              color = colors.error;
+              alpha = 0.6;
+            } else {
+              color = colors.tile;
+              alpha = 0.4;
+            }
           } else {
             color = colors.tile;
-            alpha = 0.4;
+            alpha = 0.3;
           }
         } else if (inPreviousSeg) {
-          const seq = this.level.sequence[idx];
-          const tap = this.playerTaps[idx];
-          if (seq && tap) {
-            color = colors.accent;
-            alpha = 1;
-          } else if (seq && !tap) {
-            color = colors.error;
-            alpha = 1;
-          } else if (!seq && tap) {
-            color = colors.error;
-            alpha = 0.6;
-          } else {
-            color = colors.tile;
-            alpha = 0.4;
-          }
+          color = colors.tile;
+          alpha = 0.3;
         } else if (
           this.state === "listening" &&
           inCurrentSeg &&
@@ -422,13 +475,9 @@ export class GameScene extends Phaser.Scene {
           alpha = 0.5;
         }
 
-        if (
-          this.state === "playing" &&
-          inCurrentSeg &&
-          this.playerTaps[idx]
-        ) {
-          color = colors.accent;
-          alpha = 1;
+        if (this.state !== "finalResult" && this.playerTaps[idx]) {
+          color = colors.white;
+          alpha = 0.7;
         }
 
         const cx = x + s / 2;
@@ -456,10 +505,37 @@ export class GameScene extends Phaser.Scene {
   private renderButton(): void {
     const g = this.btnGraphics;
     g.clear();
-    const btnColor =
-      this.state === "playing" || this.state === "finalResult"
-        ? colors.accent
-        : colors.error;
+
+    if (this.state === "finalResult") {
+      this.tapLabel.setText("");
+      if (this.resultRevealIndex >= TOTAL_BEATS) {
+        this.resultText.setAlpha(1);
+        this.retryBtnGraphics.setAlpha(1);
+        this.retryBtnLabel.setAlpha(1);
+
+        const rw = 160,
+          rh = 44;
+        const rx = this.btnCX - rw / 2;
+        const ry = this.btnCY + 55 - rh / 2;
+        const rg = this.retryBtnGraphics;
+        rg.clear();
+        rg.fillStyle(colors.tileShadow, 1);
+        rg.fillRoundedRect(rx, ry + 3, rw, rh, 8);
+        rg.fillStyle(colors.accent, 1);
+        rg.fillRoundedRect(rx, ry, rw, rh, 8);
+      } else {
+        this.resultText.setAlpha(0);
+        this.retryBtnGraphics.setAlpha(0);
+        this.retryBtnLabel.setAlpha(0);
+      }
+      return;
+    }
+
+    this.resultText.setAlpha(0);
+    this.retryBtnGraphics.setAlpha(0);
+    this.retryBtnLabel.setAlpha(0);
+
+    const btnColor = this.state === "playing" ? colors.accent : colors.error;
     g.fillStyle(colors.tileShadow, 1);
     g.fillCircle(this.btnCX, this.btnCY + 16, this.btnW / 2);
     g.fillStyle(btnColor, 1);
@@ -468,14 +544,11 @@ export class GameScene extends Phaser.Scene {
     if (this.state === "playing") {
       this.tapLabel.setText("TRYKK");
       this.tapLabel.setColor(colors.textWhite);
-    } else if (this.state === "finalResult") {
-      this.tapLabel.setText("IGJEN");
-      this.tapLabel.setColor(colors.textWhite);
     } else if (this.state === "countdown" && this.countdownTarget === "play") {
       this.tapLabel.setText("KLAR?");
       this.tapLabel.setColor(colors.textWhite);
     } else {
-      this.tapLabel.setText("...");
+      this.tapLabel.setText("LYTT");
       this.tapLabel.setColor(colors.textDisabled);
     }
   }
