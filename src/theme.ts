@@ -6,6 +6,7 @@ export const colors = {
   tileShadow: 0x15152e,
   accent: 0x00c4d8,
   error: 0xff7461,
+  disabled: 0x444466,
   white: 0xffffff,
   textMuted: "#555577",
   textDisabled: "#888888",

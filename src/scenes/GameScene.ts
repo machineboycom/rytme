@@ -20,6 +20,7 @@ export class GameScene extends Phaser.Scene {
   private round = 0;
   private level!: LevelData;
   private playerTaps: boolean[] = [];
+  private tapAccuracy: number[] = [];
   private phaseStartTime = 0;
   private lastHighlight = -1;
   private phaseEndTimer?: Phaser.Time.TimerEvent;
@@ -115,6 +116,7 @@ export class GameScene extends Phaser.Scene {
         fontSize: "28px",
         color: colors.textWhite,
         fontStyle: "bold",
+        align: "center",
       })
       .setOrigin(0.5)
       .setAlpha(0);
@@ -122,11 +124,12 @@ export class GameScene extends Phaser.Scene {
     this.retryBtnGraphics = this.add.graphics().setAlpha(0);
 
     this.retryBtnLabel = this.add
-      .text(this.btnCX, this.btnCY + 55, "PRØV IGJEN", {
+      .text(this.btnCX, this.btnCY + 80, "PRØV IGJEN", {
         fontFamily: "Arial, sans-serif",
         fontSize: "18px",
         color: colors.textWhite,
         fontStyle: "bold",
+        align: "center",
       })
       .setOrigin(0.5)
       .setAlpha(0);
@@ -157,6 +160,7 @@ export class GameScene extends Phaser.Scene {
     this.round = 0;
     this.level = LevelGenerator.generate();
     this.playerTaps = new Array(TOTAL_BEATS).fill(false);
+    this.tapAccuracy = new Array(TOTAL_BEATS).fill(-1);
     this.enterCountdown("listen");
   }
 
@@ -293,11 +297,18 @@ export class GameScene extends Phaser.Scene {
             0,
             TOTAL_BEATS - this.totalMissed - this.totalWrong,
           );
+          let accuracyTotal = 0;
+          for (let i = 0; i < TOTAL_BEATS; i++) {
+            if (this.level.sequence[i] && this.tapAccuracy[i] >= 0) {
+              accuracyTotal += Math.max(0, Math.round(100 * (1 - this.tapAccuracy[i] / 200)));
+            }
+          }
+          const accText = `\nNøyaktighetsbonus: ${accuracyTotal} poeng`;
           if (score === 16) {
-            this.resultText.setText(`Perfekt! 16/16`);
+            this.resultText.setText(`Perfekt! 16/16${accText}`);
           } else {
             this.resultText.setText(
-              `${score}/16  (${this.totalMissed} bom, ${this.totalWrong} feil)`,
+              `${score}/16  (${this.totalMissed} bom, ${this.totalWrong} feil)${accText}`,
             );
             audio.scheduleBuzz(audio.currentTime + 0.05);
           }
@@ -328,6 +339,8 @@ export class GameScene extends Phaser.Scene {
         const diff = Math.abs(rawBeat - Math.round(rawBeat));
         if (diff < 0.35) {
           this.playerTaps[beat] = true;
+          this.tapAccuracy[beat] = diff * this.b * 1000;
+          console.log(this.tapAccuracy[beat]);
           audio.playSnareNow();
           if (this.level.sequence[beat]) {
             this.showHitEffect(beat);
@@ -457,7 +470,7 @@ export class GameScene extends Phaser.Scene {
           }
         } else if (inPreviousSeg) {
           color = colors.tile;
-          alpha = 0.3;
+          alpha = 0.5;
         } else if (
           this.state === "listening" &&
           inCurrentSeg &&
@@ -476,8 +489,8 @@ export class GameScene extends Phaser.Scene {
         }
 
         if (this.state !== "finalResult" && this.playerTaps[idx]) {
-          color = colors.white;
-          alpha = 0.7;
+          color = colors.accent;
+          alpha = 1;
         }
 
         const cx = x + s / 2;
@@ -516,7 +529,7 @@ export class GameScene extends Phaser.Scene {
         const rw = 160,
           rh = 44;
         const rx = this.btnCX - rw / 2;
-        const ry = this.btnCY + 55 - rh / 2;
+        const ry = this.btnCY + 80 - rh / 2;
         const rg = this.retryBtnGraphics;
         rg.clear();
         rg.fillStyle(colors.tileShadow, 1);
@@ -535,7 +548,10 @@ export class GameScene extends Phaser.Scene {
     this.retryBtnGraphics.setAlpha(0);
     this.retryBtnLabel.setAlpha(0);
 
-    const btnColor = this.state === "playing" ? colors.accent : colors.error;
+    const btnColor =
+      this.state === "playing"
+        ? colors.accent
+        : colors.disabled;
     g.fillStyle(colors.tileShadow, 1);
     g.fillCircle(this.btnCX, this.btnCY + 16, this.btnW / 2);
     g.fillStyle(btnColor, 1);
