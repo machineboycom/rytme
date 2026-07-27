@@ -246,11 +246,6 @@ export class GameScene extends Phaser.Scene {
       const start = this.phaseStartTime + this.seg.count * this.b;
       this.phaseStartTime = start;
       this.scheduleCountInBeats(start, "play", COUNT_IN);
-      const next = start + COUNT_IN * this.b;
-      this.phaseEndTimer = this.time.delayedCall(COUNT_IN * this.b * 1000, () => {
-        this.countdownText.setAlpha(0);
-        this.enterPlaying(next);
-      });
     }
   }
 
@@ -441,6 +436,12 @@ export class GameScene extends Phaser.Scene {
       if (beat !== this.lastHighlight) {
         this.lastHighlight = beat;
         this.drawGrid();
+      }
+
+      if (this.countdownTarget === "play" && elapsed >= count * this.b) {
+        this.countdownText.setAlpha(0);
+        this.enterPlaying(this.phaseStartTime + count * this.b);
+        return;
       }
     }
 
