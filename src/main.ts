@@ -1,12 +1,11 @@
 import Phaser from "phaser";
 import { PreloadScene } from "./scenes/PreloadScene";
 import { GameScene } from "./scenes/GameScene";
-import { colors } from "./theme";
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.CANVAS,
   parent: document.body,
-  backgroundColor: colors.bgCss,
+  transparent: true,
   scale: {
     mode: Phaser.Scale.NONE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
@@ -24,5 +23,6 @@ const config: Phaser.Types.Core.GameConfig = {
 
 document.getElementById("start-btn")!.addEventListener("click", () => {
   document.getElementById("overlay")!.classList.add("hidden");
+  new Audio("/audio/snare1.wav").play().catch(() => {});
   new Phaser.Game(config);
 });

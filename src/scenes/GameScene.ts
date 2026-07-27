@@ -23,8 +23,8 @@ export class GameScene extends Phaser.Scene {
   private tapAccuracy: number[] = [];
   private phaseStartTime = 0;
   private lastHighlight = -1;
-  private phaseEndTimer?: Phaser.Time.TimerEvent;
   private countdownTarget: "listen" | "play" = "listen";
+  private pendingFlashes: number[] = [];
   private totalMissed = 0;
   private totalWrong = 0;
   private resultRevealIndex = 0;
@@ -55,7 +55,6 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     audio.setScene(this);
     const { width, height } = this.scale;
-    this.cameras.main.setBackgroundColor(colors.bg);
 
     this.cellSize = Math.floor(Math.min(width / 5.5, 56));
     const gridW = this.cellSize * 4 + 8 * 3;
@@ -188,20 +187,21 @@ export class GameScene extends Phaser.Scene {
   }
 
   private scheduleButtonFlash(when: number): void {
-    const delay = Math.max(0, when - audio.currentTime);
-    this.time.delayedCall(delay * 1000, () => {
-      const g = this.btnFlashGraphics;
-      g.clear();
-      g.setAlpha(1);
-      g.lineStyle(2, colors.white, 0.8);
-      g.strokeCircle(this.btnCX, this.btnCY, this.btnW / 2);
-      this.tweens.add({
-        targets: g,
-        alpha: 0,
-        duration: this.b * 500,
-        ease: "Quad.easeOut",
-        onComplete: () => g.clear(),
-      });
+    this.pendingFlashes.push(when);
+  }
+
+  private triggerFlash(): void {
+    const g = this.btnFlashGraphics;
+    g.clear();
+    g.setAlpha(1);
+    g.lineStyle(2, colors.white, 0.8);
+    g.strokeCircle(this.btnCX, this.btnCY, this.btnW / 2);
+    this.tweens.add({
+      targets: g,
+      alpha: 0,
+      duration: this.b * 500,
+      ease: "Quad.easeOut",
+      onComplete: () => g.clear(),
     });
   }
 
@@ -236,11 +236,6 @@ export class GameScene extends Phaser.Scene {
       this.phaseStartTime = start;
       const count = COUNT_IN;
       this.scheduleCountInBeats(start, "listen", count);
-      const next = start + count * this.b;
-      this.phaseEndTimer = this.time.delayedCall(count * this.b * 1000, () => {
-        this.countdownText.setAlpha(0);
-        this.enterListening(next);
-      });
     } else {
       // this.statusText.setText("Gjør deg klar!");
       const start = this.phaseStartTime + this.seg.count * this.b;
@@ -255,29 +250,14 @@ export class GameScene extends Phaser.Scene {
     this.phaseStartTime = start;
     this.renderButton();
     this.scheduleBeats(start, this.seg.count, this.seg.start);
-
-    this.phaseEndTimer = this.time.delayedCall(
-      this.seg.count * this.b * 1000,
-      () => {
-        this.enterCountdown("play");
-      },
-    );
   }
 
   private enterPlaying(start: number): void {
     this.state = "playing";
     this.lastHighlight = -1;
     this.phaseStartTime = start;
-    // this.statusText.setText("Din tur!");
     this.renderButton();
     this.scheduleBeats(start, this.seg.count, this.seg.start, false);
-
-    this.phaseEndTimer = this.time.delayedCall(
-      this.seg.count * this.b * 1000,
-      () => {
-        this.scoreRound();
-      },
-    );
   }
 
   private scoreRound(): void {
@@ -303,7 +283,6 @@ export class GameScene extends Phaser.Scene {
 
     this.state = "finalResult";
     this.resultRevealIndex = 0;
-    // this.statusText.setText("");
     this.renderButton();
     this.drawGrid();
 
@@ -318,29 +297,42 @@ export class GameScene extends Phaser.Scene {
         }
         this.drawGrid();
         if (this.resultRevealIndex >= TOTAL_BEATS) {
-          const correctHits = Math.max(
+          let correct = 0;
+          let finalMissed = 0;
+          let finalWrong = 0;
+          let totalHits = 0;
+          for (let i = 0; i < TOTAL_BEATS; i++) {
+            if (seq[i]) totalHits++;
+            if (seq[i] && taps[i]) correct++;
+            if (seq[i] && !taps[i]) finalMissed++;
+            if (!seq[i] && taps[i]) finalWrong++;
+          }
+          const score = Math.max(
             0,
-            TOTAL_BEATS - this.totalMissed - this.totalWrong,
+            correct * 100 - finalWrong * 100 - finalMissed * 50,
           );
+          const avg = Math.max(0, correct - 1);
           let accuracyTotal = 0;
           for (let i = 0; i < TOTAL_BEATS; i++) {
-            if (this.level.sequence[i] && this.playerTaps[i]) {
-              const bonus = Math.max(
+            if (seq[i] && taps[i]) {
+              accuracyTotal += Math.max(
                 0,
                 Math.round(100 * (1 - Math.abs(this.tapAccuracy[i]) / 100)),
               );
-              console.log(`Beat ${i}: ${this.tapAccuracy[i].toFixed(1)}ms → ${bonus} poeng`);
-              accuracyTotal += bonus;
             }
           }
-          const totalScore = correctHits * 1000 + accuracyTotal;
-          if (correctHits === 16) {
+          const hitScore = Math.max(
+            0,
+            correct * 100 - finalWrong * 100 - finalMissed * 50,
+          );
+          const total = hitScore + accuracyTotal;
+          if (correct === totalHits) {
             this.resultText.setText(
-              `Perfekt!\nNøyaktighetsbonus: ${accuracyTotal} poeng\nTotalt: ${totalScore} poeng`,
+              `Perfekt!\nNøyaktighetsbonus: ${accuracyTotal} poeng\nTotalt: ${total} poeng\n\nFolk flest: ${avg * 177} poeng`,
             );
           } else {
             this.resultText.setText(
-              `Du klarte ${correctHits}/16\nNøyaktighetsbonus: ${accuracyTotal} poeng\nTotalt: ${totalScore} poeng`,
+              `Du traff ${correct}/${totalHits}\nNøyaktighetsbonus: ${accuracyTotal} poeng\nTotalt: ${total} poeng\n\nFolk flest: ${avg * 177} poeng`,
             );
             audio.scheduleBuzz(audio.currentTime + 0.05);
           }
@@ -421,14 +413,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(): void {
+    const now = audio.currentTime;
+
     if (this.state === "countdown") {
-      const elapsed = audio.currentTime - this.phaseStartTime;
+      const elapsed = now - this.phaseStartTime;
       const beat = Math.floor(elapsed / this.b);
       const count = COUNT_IN;
       if (beat >= 0 && beat < count) {
         if (this.countdownTarget === "play") {
-          const num = count - beat;
-          this.countdownText.setText(String(num)).setAlpha(1);
+          this.countdownText.setText(String(count - beat)).setAlpha(1);
         } else {
           this.countdownText.setText("LYTT").setAlpha(1);
         }
@@ -438,20 +431,21 @@ export class GameScene extends Phaser.Scene {
         this.drawGrid();
       }
 
-      if (this.countdownTarget === "play" && elapsed >= count * this.b) {
+      if (this.countdownTarget === "play") {
+        if (elapsed >= (count - 1) * this.b) {
+          this.countdownText.setAlpha(0);
+          this.enterPlaying(this.phaseStartTime + count * this.b);
+        }
+      } else if (elapsed >= count * this.b) {
         this.countdownText.setAlpha(0);
-        this.enterPlaying(this.phaseStartTime + count * this.b);
-        return;
+        this.enterListening(this.phaseStartTime + count * this.b);
       }
-    }
-
-    if (this.state === "listening" || this.state === "playing") {
-      const elapsed = audio.currentTime - this.phaseStartTime;
+    } else if (this.state === "listening") {
+      const elapsed = now - this.phaseStartTime;
       const beat = Math.floor(elapsed / this.b);
       if (beat !== this.lastHighlight) {
         this.lastHighlight = beat;
         if (
-          this.state === "listening" &&
           beat >= 0 &&
           beat < this.seg.count &&
           this.level.sequence[this.seg.start + beat]
@@ -460,7 +454,36 @@ export class GameScene extends Phaser.Scene {
         }
         this.drawGrid();
       }
+      if (elapsed >= this.seg.count * this.b) {
+        this.enterCountdown("play");
+      }
+    } else if (this.state === "playing") {
+      const elapsed = now - this.phaseStartTime;
+      const beat = Math.floor(elapsed / this.b);
+      if (beat !== this.lastHighlight) {
+        this.lastHighlight = beat;
+        this.drawGrid();
+      }
+      if (elapsed >= this.seg.count * this.b) {
+        this.scoreRound();
+      }
     }
+
+    this.processFlashes(now);
+  }
+
+  private processFlashes(now: number): void {
+    if (this.pendingFlashes.length === 0) return;
+    let flashed = false;
+    for (const when of this.pendingFlashes) {
+      if (now >= when) {
+        if (!flashed) {
+          this.triggerFlash();
+          flashed = true;
+        }
+      }
+    }
+    this.pendingFlashes = this.pendingFlashes.filter((w) => now < w);
   }
 
   private drawGrid(): void {
