@@ -23,6 +23,6 @@ const config: Phaser.Types.Core.GameConfig = {
 
 document.getElementById("start-btn")!.addEventListener("click", () => {
   document.getElementById("overlay")!.classList.add("hidden");
-  new Audio("/audio/snare1.wav").play().catch(() => {});
+  new Audio("/audio/ding.wav").play().catch(() => {});
   new Phaser.Game(config);
 });

@@ -287,7 +287,7 @@ export class GameScene extends Phaser.Scene {
     this.drawGrid();
 
     this.resultTimer = this.time.addEvent({
-      delay: 100,
+      delay: 150,
       repeat: TOTAL_BEATS - 1,
       callback: () => {
         this.resultRevealIndex++;
@@ -296,6 +296,49 @@ export class GameScene extends Phaser.Scene {
           this.showHitEffect(revealed);
         }
         this.drawGrid();
+
+        const seqHit = this.level.sequence[revealed];
+        const tapHit = this.playerTaps[revealed];
+        let pts = 0;
+        let ptsColor: number = colors.white;
+        if (seqHit && tapHit) {
+          const accBonus = Math.max(
+            0,
+            Math.round(100 * (1 - Math.abs(this.tapAccuracy[revealed]) / 100)),
+          );
+          pts = 100 + accBonus;
+          ptsColor = colors.accent;
+        } else if (seqHit && !tapHit) {
+          pts = -50;
+          ptsColor = colors.error;
+        } else if (!seqHit && tapHit) {
+          pts = -100;
+          ptsColor = colors.error;
+        }
+        if (pts !== 0) {
+          const { cx, cy } = this.tileCenter(revealed);
+          const hex = "#" + ptsColor.toString(16).padStart(6, "0");
+          const txt = this.add
+            .text(cx, cy, `${pts > 0 ? "+" : ""}${pts}`, {
+              fontFamily: "Arial, sans-serif",
+              fontSize: "20px",
+              color: hex,
+              fontStyle: "normal",
+            })
+            .setOrigin(0.5)
+            .setShadow(1, 1, "#00000082", 0, false, true);
+          this.tweens.add({
+            targets: txt,
+            alpha: 0,
+            scaleX: 1.5,
+            scaleY: 1.5,
+            y: cy - 40,
+            duration: 2500,
+            ease: "Quad.easeOut",
+            onComplete: () => txt.destroy(),
+          });
+        }
+
         if (this.resultRevealIndex >= TOTAL_BEATS) {
           let correct = 0;
           let finalMissed = 0;
@@ -307,11 +350,6 @@ export class GameScene extends Phaser.Scene {
             if (seq[i] && !taps[i]) finalMissed++;
             if (!seq[i] && taps[i]) finalWrong++;
           }
-          const score = Math.max(
-            0,
-            correct * 100 - finalWrong * 100 - finalMissed * 50,
-          );
-          const avg = Math.max(0, correct - 1);
           let accuracyTotal = 0;
           for (let i = 0; i < TOTAL_BEATS; i++) {
             if (seq[i] && taps[i]) {
@@ -326,16 +364,32 @@ export class GameScene extends Phaser.Scene {
             correct * 100 - finalWrong * 100 - finalMissed * 50,
           );
           const total = hitScore + accuracyTotal;
-          if (correct === totalHits) {
-            this.resultText.setText(
-              `Perfekt!\nNøyaktighetsbonus: ${accuracyTotal} poeng\nTotalt: ${total} poeng\n\nFolk flest: ${avg * 177} poeng`,
-            );
+          const folkFlest = Math.max(0, totalHits - 1) * 177;
+
+          let recordLine = "";
+          const key = `rytme_best_${this.level.dateStr}`;
+          const prev = localStorage.getItem(key);
+          if (prev !== null) {
+            const prevBest = Number(prev);
+            if (total > prevBest) {
+              localStorage.setItem(key, String(total));
+              recordLine = `\nNy rekord: ${total} poeng`;
+            } else {
+              recordLine = `\nDin rekord: ${prevBest} poeng`;
+            }
           } else {
-            this.resultText.setText(
-              `Du traff ${correct}/${totalHits}\nNøyaktighetsbonus: ${accuracyTotal} poeng\nTotalt: ${total} poeng\n\nFolk flest: ${avg * 177} poeng`,
-            );
-            audio.scheduleBuzz(audio.currentTime + 0.05);
+            localStorage.setItem(key, String(total));
           }
+
+          let result = correct === totalHits ? "Perfekt!" : "";
+          result += `\nTreff: ${correct}`;
+          if (finalMissed > 0) result += `\nBom: ${finalMissed}`;
+          if (finalWrong > 0) result += `\nFeil: ${finalWrong}`;
+          result += `\nNøyaktighetsbonus: ${accuracyTotal} poeng`;
+          result += `\nTotalt: ${total} poeng`;
+          if (recordLine) result += recordLine;
+          result += `\n\nFolk flest: ${folkFlest} poeng`;
+          this.resultText.setText(result);
           this.renderButton();
         }
       },
@@ -522,10 +576,10 @@ export class GameScene extends Phaser.Scene {
               alpha = 1;
             } else if (seq && !tap) {
               color = colors.error;
-              alpha = 1;
+              alpha = 0.6;
             } else if (!seq && tap) {
               color = colors.error;
-              alpha = 0.6;
+              alpha = 1;
             } else {
               color = colors.tile;
               alpha = 0.4;
@@ -627,11 +681,7 @@ export class GameScene extends Phaser.Scene {
     this.retryBtnGraphics.setAlpha(0);
     this.retryBtnLabel.setAlpha(0);
 
-    const btnColor =
-      this.state === "playing" ||
-      (this.state === "countdown" && this.countdownTarget === "listen")
-        ? colors.accent
-        : colors.disabled;
+    const btnColor = this.state === "playing" ? colors.accent : colors.disabled;
     g.fillStyle(colors.tileShadow, 1);
     g.fillCircle(this.btnCX, this.btnCY + 16, this.btnW / 2);
     g.fillStyle(btnColor, 1);
