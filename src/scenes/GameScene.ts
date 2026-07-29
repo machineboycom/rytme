@@ -2,12 +2,13 @@ import Phaser from "phaser";
 import { audio } from "../audio/LowLatencyAudio";
 import { LevelGenerator, type LevelData } from "../levels/LevelGenerator";
 import { colors } from "../theme";
+import { GridRenderer, type State } from "../grid/GridRenderer";
+import { ScoreKeeper, type FinalScore } from "../scoring/ScoreKeeper";
+import { ResultScreen } from "../ui/ResultScreen";
 
 const BPM = 100;
 const TOTAL_BEATS = 16;
 const COUNT_IN = 4;
-
-type State = "intro" | "countdown" | "listening" | "playing" | "finalResult";
 
 const SEGMENTS = [
   { start: 0, count: 4 },
@@ -18,6 +19,7 @@ const SEGMENTS = [
 export class GameScene extends Phaser.Scene {
   private state: State = "countdown";
   private round = 0;
+  private revealIndex = 0;
   private level!: LevelData;
   private playerTaps: boolean[] = [];
   private tapAccuracy: number[] = [];
@@ -25,32 +27,20 @@ export class GameScene extends Phaser.Scene {
   private lastHighlight = -1;
   private countdownTarget: "listen" | "play" = "listen";
   private pendingFlashes: number[] = [];
-  private totalMissed = 0;
-  private totalWrong = 0;
-  private resultRevealIndex = 0;
-  private resultTimer?: Phaser.Time.TimerEvent;
 
-  // private statusText!: Phaser.GameObjects.Text;
   private countdownText!: Phaser.GameObjects.Text;
   private tapLabel!: Phaser.GameObjects.Text;
-  private resultText!: Phaser.GameObjects.Text;
-  private recordLabel!: Phaser.GameObjects.Text;
-  private recordValue!: Phaser.GameObjects.Text;
-  private recordSuffix!: Phaser.GameObjects.Text;
-  private retryBtnGraphics!: Phaser.GameObjects.Graphics;
-  private retryBtnLabel!: Phaser.GameObjects.Text;
   private btnGraphics!: Phaser.GameObjects.Graphics;
   private btnFlashGraphics!: Phaser.GameObjects.Graphics;
-  private gridGraphics!: Phaser.GameObjects.Graphics;
-  private sweepGraphics!: Phaser.GameObjects.Graphics;
 
-  private cellSize = 0;
-  private gridX = 0;
-  private gridY = 0;
   private btnW = 0;
   private btnH = 0;
   private btnCX = 0;
   private btnCY = 0;
+
+  private grid!: GridRenderer;
+  private score!: ScoreKeeper;
+  private result!: ResultScreen;
 
   constructor() {
     super({ key: "GameScene" });
@@ -60,19 +50,19 @@ export class GameScene extends Phaser.Scene {
     audio.setScene(this);
     const { width, height } = this.scale;
 
-    this.cellSize = Math.floor(Math.min(width / 5.5, 56));
-    const gridW = this.cellSize * 4 + 8 * 3;
-    const gridH = this.cellSize * 4 + 8 * 3;
-    this.gridX = (width - gridW) / 2;
-    this.gridY = 48;
-
-    this.sweepGraphics = this.add.graphics();
-    this.gridGraphics = this.add.graphics();
-
     this.btnW = Math.min(200, width * 0.5);
     this.btnH = Math.min(200, this.btnW);
     this.btnCX = width / 2;
-    this.btnCY = this.gridY + gridH + 60 + this.btnH / 2;
+
+    this.grid = new GridRenderer(this, width);
+    this.score = new ScoreKeeper();
+    this.result = new ResultScreen(
+      this,
+      this.btnCX,
+      this.grid.gridY + this.grid.gridH + 60 + this.btnH / 2,
+    );
+
+    this.btnCY = this.grid.gridY + this.grid.gridH + 60 + this.btnH / 2;
 
     this.btnGraphics = this.add.graphics();
     this.btnFlashGraphics = this.add.graphics();
@@ -90,61 +80,11 @@ export class GameScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    // this.statusText = this.add
-    //   .text(width / 2, 12, "", {
-    //     fontFamily: "'NRK Sans Variable', Arial, sans-serif",
-    //     fontSize: "20px",
-    //     color: colors.textWhite,
-    //   })
-    //   .setOrigin(0.5, 0);
-
     this.countdownText = this.add
-      .text(width / 2, this.gridY + gridH / 1.5, "", {
+      .text(width / 2, this.grid.gridY + this.grid.gridH / 1.5, "", {
         fontFamily: "'NRK Sans Variable', Arial, sans-serif",
         fontSize: "72px",
         color: colors.textWhite,
-      })
-      .setOrigin(0.5)
-      .setAlpha(0);
-
-    this.resultText = this.add
-      .text(this.btnCX, this.btnCY - 50, "", {
-        fontFamily: "'NRK Sans Variable', Arial, sans-serif",
-        fontSize: "18px",
-        color: colors.textWhite,
-        fontStyle: "normal",
-        align: "center",
-      })
-      .setOrigin(0.5)
-      .setAlpha(0);
-
-    const recordStyle: Phaser.Types.GameObjects.Text.TextStyle = {
-      fontFamily: "'NRK Sans Variable', Arial, sans-serif",
-      fontSize: "18px",
-      fontStyle: "normal",
-    };
-    this.recordLabel = this.add
-      .text(0, 0, "", { ...recordStyle, color: colors.textWhite })
-      .setOrigin(0, 0.5)
-      .setAlpha(0);
-    this.recordValue = this.add
-      .text(0, 0, "", { ...recordStyle, color: "#ffcc00" })
-      .setOrigin(0, 0.5)
-      .setAlpha(0);
-    this.recordSuffix = this.add
-      .text(0, 0, "", { ...recordStyle, color: colors.textWhite })
-      .setOrigin(0, 0.5)
-      .setAlpha(0);
-
-    this.retryBtnGraphics = this.add.graphics().setAlpha(0);
-
-    this.retryBtnLabel = this.add
-      .text(this.btnCX, this.btnCY + 80, "PRØV IGJEN", {
-        fontFamily: "'NRK Sans Variable', Arial, sans-serif",
-        fontSize: "18px",
-        color: colors.textWhite,
-        fontStyle: "normal",
-        align: "center",
       })
       .setOrigin(0.5)
       .setAlpha(0);
@@ -169,12 +109,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private startNewGame(): void {
-    this.resultTimer?.destroy();
-    this.recordLabel.setAlpha(0);
-    this.recordValue.setAlpha(0);
-    this.recordSuffix.setAlpha(0);
-    this.totalMissed = 0;
-    this.totalWrong = 0;
+    this.result.stopTimer();
+    this.result.hideAll();
+    this.score.totalMissed = 0;
+    this.score.totalWrong = 0;
     this.round = 0;
     this.level = LevelGenerator.generate();
     this.playerTaps = new Array(TOTAL_BEATS).fill(false);
@@ -184,16 +122,16 @@ export class GameScene extends Phaser.Scene {
 
   private startIntro(): void {
     this.state = "intro";
-    this.resultRevealIndex = 0;
+    this.revealIndex = 0;
     this.renderButton();
-    this.drawGrid();
+    this.grid.drawGrid(this.drawParams());
     this.time.addEvent({
       delay: 100,
       repeat: 3,
       callback: () => {
-        this.resultRevealIndex++;
-        this.drawGrid();
-        if (this.resultRevealIndex >= 4) {
+        this.revealIndex++;
+        this.grid.drawGrid(this.drawParams());
+        if (this.revealIndex >= 4) {
           this.startNewGame();
         }
       },
@@ -208,7 +146,7 @@ export class GameScene extends Phaser.Scene {
     for (let i = 0; i < count; i++) {
       const t = start + i * this.b;
       this.scheduleButtonFlash(t);
-      audio.scheduleVoice("rim2", t);
+      audio.scheduleVoice("rim", t);
     }
   }
 
@@ -244,7 +182,7 @@ export class GameScene extends Phaser.Scene {
       if (playSnares && this.level.sequence[seqIdx]) {
         audio.scheduleSnare(t);
       } else {
-        audio.scheduleRim(t, i % 4 === 0);
+        audio.scheduleBuzz(t);
       }
     }
   }
@@ -253,18 +191,15 @@ export class GameScene extends Phaser.Scene {
     this.state = "countdown";
     this.countdownTarget = target;
     this.lastHighlight = -1;
-    this.sweepGraphics.clear();
+    this.grid.clearSweep();
     this.renderButton();
-    this.drawGrid();
+    this.grid.drawGrid(this.drawParams());
 
     if (target === "listen") {
-      // this.statusText.setText("LYTT!");
       const start = audio.currentTime + 0.05;
       this.phaseStartTime = start;
-      const count = COUNT_IN;
-      this.scheduleCountInBeats(start, "listen", count);
+      this.scheduleCountInBeats(start, "listen", COUNT_IN);
     } else {
-      // this.statusText.setText("Gjør deg klar!");
       const start = this.phaseStartTime + this.seg.count * this.b;
       this.phaseStartTime = start;
       this.scheduleCountInBeats(start, "play", COUNT_IN);
@@ -275,7 +210,7 @@ export class GameScene extends Phaser.Scene {
     this.state = "listening";
     this.lastHighlight = -1;
     this.phaseStartTime = start;
-    this.sweepGraphics.clear();
+    this.grid.clearSweep();
     this.renderButton();
     this.scheduleBeats(start, this.seg.count, this.seg.start);
   }
@@ -288,20 +223,26 @@ export class GameScene extends Phaser.Scene {
     this.scheduleBeats(start, this.seg.count, this.seg.start, false);
   }
 
+  private drawParams() {
+    return {
+      state: this.state,
+      segStart: this.seg.start,
+      segEnd: this.segEnd,
+      visibleEnd: this.visibleEnd,
+      sequence: this.level?.sequence ?? [],
+      playerTaps: this.playerTaps,
+      tapAccuracy: this.tapAccuracy,
+      lastHighlight: this.lastHighlight,
+      resultRevealIndex: this.revealIndex,
+    };
+  }
+
   private scoreRound(): void {
     const seq = this.level.sequence;
     const taps = this.playerTaps;
     const { start, count } = this.seg;
-    let missed = 0;
-    let wrong = 0;
 
-    for (let i = start; i < start + count; i++) {
-      if (seq[i] && !taps[i]) missed++;
-      if (!seq[i] && taps[i]) wrong++;
-    }
-
-    this.totalMissed += missed;
-    this.totalWrong += wrong;
+    this.score.scoreRound(seq, taps, start, count);
 
     if (this.round < SEGMENTS.length - 1) {
       this.round++;
@@ -310,149 +251,44 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.state = "finalResult";
-    this.sweepGraphics.clear();
-    this.resultRevealIndex = 0;
+    this.revealIndex = 0;
+    this.grid.clearSweep();
     this.renderButton();
-    this.drawGrid();
+    this.grid.drawGrid(this.drawParams());
 
-    this.resultTimer = this.time.addEvent({
+    this.time.addEvent({
       delay: 150,
       repeat: TOTAL_BEATS - 1,
       callback: () => {
-        this.resultRevealIndex++;
-        const revealed = this.resultRevealIndex - 1;
-        if (this.level.sequence[revealed] && this.playerTaps[revealed]) {
-          this.showHitEffect(revealed);
+        this.revealIndex++;
+        const revealed = this.revealIndex - 1;
+        if (seq[revealed] && taps[revealed]) {
+          this.grid.showHitEffect(revealed);
         }
-        this.drawGrid();
+        this.grid.drawGrid(this.drawParams());
 
-        const seqHit = this.level.sequence[revealed];
-        const tapHit = this.playerTaps[revealed];
-        let pts = 0;
-        let ptsColor: number = colors.white;
-        if (seqHit && tapHit) {
-          const accBonus = Math.max(
-            0,
-            Math.round(100 * (1 - Math.abs(this.tapAccuracy[revealed]) / 100)),
-          );
-          pts = 100 + accBonus;
-          ptsColor = colors.accent;
-        } else if (seqHit && !tapHit) {
-          pts = -50;
-          ptsColor = colors.error;
-        } else if (!seqHit && tapHit) {
-          pts = -100;
-          ptsColor = colors.error;
-        }
-        if (pts !== 0) {
-          const { cx, cy } = this.tileCenter(revealed);
-          const hex = "#" + ptsColor.toString(16).padStart(6, "0");
-          const txt = this.add
-            .text(cx, cy, `${pts > 0 ? "+" : ""}${pts}`, {
-              fontFamily: "'NRK Sans Variable', Arial, sans-serif",
-              fontSize: "20px",
-              color: hex,
-              fontStyle: "normal",
-            })
-            .setOrigin(0.5)
-            .setShadow(1, 1, "#00000082", 0, false, true);
-          this.tweens.add({
-            targets: txt,
-            alpha: 0,
-            scaleX: 1.5,
-            scaleY: 1.5,
-            y: cy - 40,
-            duration: 2500,
-            ease: "Quad.easeOut",
-            onComplete: () => txt.destroy(),
+        this.result.showFloatingPoints(
+          revealed,
+          seq,
+          taps,
+          this.tapAccuracy,
+          (idx) => this.grid.tileCenter(idx),
+        );
+
+        if (this.revealIndex >= TOTAL_BEATS) {
+          const final = this.score.finalScore(seq, taps, this.tapAccuracy);
+          this.result.showResults(final.total, this.level.dateStr, {
+            correct: final.correct,
+            totalHits: final.totalHits,
+            finalWrong: final.wrong,
+            missed: final.missed,
+            wrong: final.wrong,
+            accuracyTotal: final.accuracyTotal,
+            total: final.total,
+            folkFlest: final.folkFlest,
+            perfect: final.perfect,
           });
-        }
-
-        if (this.resultRevealIndex >= TOTAL_BEATS) {
-          let correct = 0;
-          let finalMissed = 0;
-          let finalWrong = 0;
-          let totalHits = 0;
-          for (let i = 0; i < TOTAL_BEATS; i++) {
-            if (seq[i]) totalHits++;
-            if (seq[i] && taps[i]) correct++;
-            if (seq[i] && !taps[i]) finalMissed++;
-            if (!seq[i] && taps[i]) finalWrong++;
-          }
-          let accuracyTotal = 0;
-          for (let i = 0; i < TOTAL_BEATS; i++) {
-            if (seq[i] && taps[i]) {
-              accuracyTotal += Math.max(
-                0,
-                Math.round(100 * (1 - Math.abs(this.tapAccuracy[i]) / 100)),
-              );
-            }
-          }
-          const hitScore = Math.max(
-            0,
-            correct * 100 - finalWrong * 100 - finalMissed * 50,
-          );
-          const total = hitScore + accuracyTotal;
-          const folkFlest = Math.max(0, totalHits - 1) * 177;
-
-          let recordLine = "";
-          const key = `rytme_best_${this.level.dateStr}`;
-          const prev = localStorage.getItem(key);
-          if (prev !== null) {
-            const prevBest = Number(prev);
-            if (total > prevBest) {
-              localStorage.setItem(key, String(total));
-              recordLine = `\nNy rekord: ${total} poeng`;
-            } else {
-              recordLine = `\nDin rekord: ${prevBest} poeng`;
-            }
-          } else {
-            localStorage.setItem(key, String(total));
-          }
-
-          let result =
-            correct === totalHits && finalWrong === 0 ? "Perfekt!" : "";
-          result += `\nTreff: ${correct}`;
-          if (finalMissed > 0) result += `\nBom: ${finalMissed}`;
-          if (finalWrong > 0) result += `\nFeil: ${finalWrong}`;
-          result += `\nNøyaktighetsbonus: ${accuracyTotal} poeng`;
-          result += `\nTotalt: ${total} poeng`;
-          result += `\n\nFolk flest: ${folkFlest} poeng`;
-          this.resultText.setText(result);
-
-          const recordY = this.resultText.y + this.resultText.height / 2 + 8;
-          if (recordLine) {
-            const prefix = recordLine.includes("Ny")
-              ? "Ny rekord: "
-              : "Din rekord: ";
-            const val = String(
-              recordLine.includes("Ny") ? total : Number(prev),
-            );
-            this.recordLabel
-              .setText(prefix)
-              .setPosition(0, recordY)
-              .setAlpha(1);
-            this.recordValue.setText(val).setAlpha(1);
-            this.recordSuffix.setText(" poeng").setAlpha(1);
-            const totalW =
-              this.recordLabel.width +
-              this.recordValue.width +
-              this.recordSuffix.width;
-            const startX = this.btnCX - totalW / 2;
-            this.recordLabel.setPosition(startX, recordY);
-            this.recordValue.setPosition(
-              startX + this.recordLabel.width,
-              recordY,
-            );
-            this.recordSuffix.setPosition(
-              startX + this.recordLabel.width + this.recordValue.width,
-              recordY,
-            );
-          } else {
-            this.recordLabel.setAlpha(0);
-            this.recordValue.setAlpha(0);
-            this.recordSuffix.setAlpha(0);
-          }
+          this.grid.drawGrid(this.drawParams());
           this.renderButton();
         }
       },
@@ -461,7 +297,7 @@ export class GameScene extends Phaser.Scene {
 
   private onTapDown(): void {
     if (this.state === "finalResult") {
-      if (this.resultRevealIndex >= TOTAL_BEATS) {
+      if (this.revealIndex >= TOTAL_BEATS) {
         this.startNewGame();
       }
       return;
@@ -483,41 +319,13 @@ export class GameScene extends Phaser.Scene {
         console.log(this.tapAccuracy[beat]);
         audio.playSnareNow();
         if (this.level.sequence[beat]) {
-          this.showHitEffect(beat);
+          this.grid.showHitEffect(beat);
         }
       }
 
       this.renderButton();
-      this.drawGrid();
+      this.grid.drawGrid(this.drawParams());
     }
-  }
-
-  private tileCenter(idx: number): { cx: number; cy: number } {
-    const bar = Math.floor(idx / 4);
-    const beat = idx % 4;
-    const s = this.cellSize;
-    const gap = 8;
-    return {
-      cx: this.gridX + beat * (s + gap) + s / 2,
-      cy: this.gridY + bar * (s + gap) + s / 2,
-    };
-  }
-
-  private showHitEffect(idx: number): void {
-    const { cx, cy } = this.tileCenter(idx);
-    const glow = this.add.graphics();
-    glow.setPosition(cx, cy);
-    glow.fillStyle(colors.accent, 0.8);
-    glow.fillCircle(0, 0, this.cellSize / 2 + 4);
-    this.tweens.add({
-      targets: glow,
-      alpha: 0,
-      scaleX: 2,
-      scaleY: 2,
-      duration: 500,
-      ease: "Quad.easeOut",
-      onComplete: () => glow.destroy(),
-    });
   }
 
   private onTapUp(): void {
@@ -542,12 +350,12 @@ export class GameScene extends Phaser.Scene {
       }
       if (beat !== this.lastHighlight) {
         this.lastHighlight = beat;
-        this.drawGrid();
+        this.grid.drawGrid(this.drawParams());
       }
 
       {
         const b = elapsed / this.b;
-        this.drawSweep(b);
+        this.grid.drawSweep(b, this.seg.start);
         if (this.countdownTarget === "play") {
           if (elapsed >= (count - 1) * this.b) {
             this.countdownText.setAlpha(0);
@@ -568,11 +376,11 @@ export class GameScene extends Phaser.Scene {
           beat < this.seg.count &&
           this.level.sequence[this.seg.start + beat]
         ) {
-          this.showHitEffect(this.seg.start + beat);
+          this.grid.showHitEffect(this.seg.start + beat);
         }
-        this.drawGrid();
+        this.grid.drawGrid(this.drawParams());
       }
-      this.drawSweep(elapsed / this.b + COUNT_IN);
+      this.grid.drawSweep(elapsed / this.b + COUNT_IN, this.seg.start);
       if (elapsed >= this.seg.count * this.b) {
         this.enterCountdown("play");
       }
@@ -581,9 +389,9 @@ export class GameScene extends Phaser.Scene {
       const beat = Math.floor(elapsed / this.b);
       if (beat !== this.lastHighlight) {
         this.lastHighlight = beat;
-        this.drawGrid();
+        this.grid.drawGrid(this.drawParams());
       }
-      this.drawSweep(elapsed / this.b + COUNT_IN);
+      this.grid.drawSweep(elapsed / this.b + COUNT_IN, this.seg.start);
       if (elapsed >= this.seg.count * this.b) {
         this.scoreRound();
       }
@@ -606,168 +414,21 @@ export class GameScene extends Phaser.Scene {
     this.pendingFlashes = this.pendingFlashes.filter((w) => now < w);
   }
 
-  private drawSweep(totalBeat: number): void {
-    const step = this.cellSize + 8;
-    const segRow = Math.floor(this.seg.start / 4);
-    const segCol = this.seg.start % 4;
-    let row: number;
-    let col: number;
-    if (totalBeat < 4) {
-      row = segRow;
-      col = segCol + (totalBeat - 4);
-    } else {
-      const offset = totalBeat - 4;
-      row = segRow + Math.floor(offset / 4);
-      col = segCol + (offset % 4);
-    }
-    const sweepX = this.gridX + col * step + this.cellSize / 2;
-    const sweepY = this.gridY + row * step + this.cellSize / 2;
-    const g = this.sweepGraphics;
-    g.clear();
-    g.fillStyle(colors.accent, 0.2);
-    g.fillCircle(sweepX, sweepY, this.cellSize / 2 + 2);
-  }
-
-  private drawGrid(): void {
-    const g = this.gridGraphics;
-    g.clear();
-    const s = this.cellSize;
-    const gap = 8;
-
-    for (let bar = 0; bar < 4; bar++) {
-      for (let beat = 0; beat < 4; beat++) {
-        const idx = bar * 4 + beat;
-
-        if (idx >= this.visibleEnd) {
-          continue;
-        }
-
-        if (this.state === "intro" && idx >= this.resultRevealIndex) {
-          continue;
-        }
-
-        const x = this.gridX + beat * (s + gap);
-        const y = this.gridY + bar * (s + gap);
-
-        const inPreviousSeg = idx < this.seg.start;
-        const inCurrentSeg = idx >= this.seg.start && idx < this.segEnd;
-
-        let color: number;
-        let alpha: number;
-
-        if (this.state === "finalResult") {
-          if (idx < this.resultRevealIndex) {
-            const seq = this.level.sequence[idx];
-            const tap = this.playerTaps[idx];
-            if (seq && tap) {
-              color = colors.accent;
-              alpha = 1;
-            } else if (seq && !tap) {
-              color = colors.error;
-              alpha = 0.6;
-            } else if (!seq && tap) {
-              color = colors.error;
-              alpha = 1;
-            } else {
-              color = colors.tile;
-              alpha = 0.4;
-            }
-          } else {
-            color = colors.tile;
-            alpha = 0.3;
-          }
-        } else if (inPreviousSeg) {
-          color = colors.tile;
-          alpha = 0.5;
-        } else if (
-          this.state === "listening" &&
-          inCurrentSeg &&
-          idx === this.seg.start + this.lastHighlight
-        ) {
-          if (this.level.sequence[idx]) {
-            color = colors.accent;
-            alpha = 1;
-          } else {
-            color = colors.error;
-            alpha = 0.5;
-          }
-        } else {
-          color = colors.tile;
-          alpha = 0.5;
-        }
-
-        if (this.state !== "finalResult" && this.playerTaps[idx]) {
-          color = colors.accent;
-          alpha = 1;
-        }
-
-        const cx = x + s / 2;
-        const cy = y + s / 2;
-        const r = s / 2 - 1;
-
-        g.fillStyle(colors.tileShadow, 1);
-        g.fillCircle(cx, cy + 2, r + 2);
-
-        g.fillStyle(color, alpha);
-        g.fillCircle(cx, cy, r);
-
-        if (
-          this.state === "finalResult" &&
-          this.playerTaps[idx] &&
-          this.level.sequence[idx]
-        ) {
-          const offsetMs = this.tapAccuracy[idx];
-          const absMs = Math.abs(offsetMs);
-          const fill = Math.max(0.1, 1 - 0.9 * (absMs / 100));
-          const shift = Phaser.Math.Clamp(offsetMs / 100, -1, 1) * r * 0.6;
-          g.fillStyle(colors.white, 0.8);
-          g.fillCircle(cx + shift, cy, r * fill);
-        }
-
-        if (
-          (this.state === "listening" || this.state === "playing") &&
-          inCurrentSeg &&
-          idx === this.seg.start + this.lastHighlight
-        ) {
-          g.lineStyle(2, colors.white, 0.7);
-          g.strokeCircle(cx, cy, r);
-        }
-      }
-    }
-  }
-
   private renderButton(): void {
     const g = this.btnGraphics;
     g.clear();
 
     if (this.state === "finalResult") {
       this.tapLabel.setText("");
-      if (this.resultRevealIndex >= TOTAL_BEATS) {
-        this.resultText.setAlpha(1);
-        this.retryBtnGraphics.setAlpha(1);
-        this.retryBtnLabel.setAlpha(1);
-
-        const rw = 160,
-          rh = 44;
-        const rx = this.btnCX - rw / 2;
-        const ry = this.btnCY + 80 - rh / 2;
-        const rg = this.retryBtnGraphics;
-        rg.clear();
-        rg.fillStyle(colors.tileShadow, 1);
-        rg.fillRoundedRect(rx, ry + 3, rw, rh, 24);
-        rg.fillStyle(colors.accent, 1);
-        rg.fillRoundedRect(rx, ry, rw, rh, 24);
+      if (this.revealIndex >= TOTAL_BEATS) {
+        this.result.renderRetryBtn(true);
       } else {
-        this.resultText.setAlpha(0);
-        this.retryBtnGraphics.setAlpha(0);
-        this.retryBtnLabel.setAlpha(0);
+        this.result.renderRetryBtn(false);
       }
       return;
     }
 
-    this.resultText.setAlpha(0);
-    this.retryBtnGraphics.setAlpha(0);
-    this.retryBtnLabel.setAlpha(0);
+    this.result.renderRetryBtn(false);
 
     const btnColor = this.state === "playing" ? colors.accent : colors.disabled;
     g.fillStyle(colors.tileShadow, 1);
