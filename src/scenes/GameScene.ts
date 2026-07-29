@@ -34,6 +34,9 @@ export class GameScene extends Phaser.Scene {
   private countdownText!: Phaser.GameObjects.Text;
   private tapLabel!: Phaser.GameObjects.Text;
   private resultText!: Phaser.GameObjects.Text;
+  private recordLabel!: Phaser.GameObjects.Text;
+  private recordValue!: Phaser.GameObjects.Text;
+  private recordSuffix!: Phaser.GameObjects.Text;
   private retryBtnGraphics!: Phaser.GameObjects.Graphics;
   private retryBtnLabel!: Phaser.GameObjects.Text;
   private btnGraphics!: Phaser.GameObjects.Graphics;
@@ -113,6 +116,24 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setAlpha(0);
 
+    const recordStyle: Phaser.Types.GameObjects.Text.TextStyle = {
+      fontFamily: "Arial, sans-serif",
+      fontSize: "18px",
+      fontStyle: "normal",
+    };
+    this.recordLabel = this.add
+      .text(0, 0, "", { ...recordStyle, color: colors.textWhite })
+      .setOrigin(0, 0.5)
+      .setAlpha(0);
+    this.recordValue = this.add
+      .text(0, 0, "", { ...recordStyle, color: "#ffcc00" })
+      .setOrigin(0, 0.5)
+      .setAlpha(0);
+    this.recordSuffix = this.add
+      .text(0, 0, "", { ...recordStyle, color: colors.textWhite })
+      .setOrigin(0, 0.5)
+      .setAlpha(0);
+
     this.retryBtnGraphics = this.add.graphics().setAlpha(0);
 
     this.retryBtnLabel = this.add
@@ -147,6 +168,9 @@ export class GameScene extends Phaser.Scene {
 
   private startNewGame(): void {
     this.resultTimer?.destroy();
+    this.recordLabel.setAlpha(0);
+    this.recordValue.setAlpha(0);
+    this.recordSuffix.setAlpha(0);
     this.totalMissed = 0;
     this.totalWrong = 0;
     this.round = 0;
@@ -387,9 +411,37 @@ export class GameScene extends Phaser.Scene {
           if (finalWrong > 0) result += `\nFeil: ${finalWrong}`;
           result += `\nNøyaktighetsbonus: ${accuracyTotal} poeng`;
           result += `\nTotalt: ${total} poeng`;
-          if (recordLine) result += recordLine;
           result += `\n\nFolk flest: ${folkFlest} poeng`;
           this.resultText.setText(result);
+
+          const recordY = this.btnCY + 25;
+          if (recordLine) {
+            const prefix = recordLine.includes("Ny") ? "Ny rekord: " : "Din rekord: ";
+            const val = String(
+              recordLine.includes("Ny") ? total : Number(prev),
+            );
+            this.recordLabel.setText(prefix).setPosition(0, recordY).setAlpha(1);
+            this.recordValue.setText(val).setAlpha(1);
+            this.recordSuffix.setText(" poeng").setAlpha(1);
+            const totalW =
+              this.recordLabel.width +
+              this.recordValue.width +
+              this.recordSuffix.width;
+            const startX = this.btnCX - totalW / 2;
+            this.recordLabel.setPosition(startX, recordY);
+            this.recordValue.setPosition(
+              startX + this.recordLabel.width,
+              recordY,
+            );
+            this.recordSuffix.setPosition(
+              startX + this.recordLabel.width + this.recordValue.width,
+              recordY,
+            );
+          } else {
+            this.recordLabel.setAlpha(0);
+            this.recordValue.setAlpha(0);
+            this.recordSuffix.setAlpha(0);
+          }
           this.renderButton();
         }
       },
