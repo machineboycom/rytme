@@ -146,7 +146,7 @@ export class ResultScreen {
       localStorage.setItem(key, String(total));
     }
 
-    let result = finalScore.perfect ? "Perfekt!" : "";
+    let result = finalScore.perfect ? "Bra!" : "";
     result += `\nTreff: ${finalScore.correct}`;
     if (finalScore.missed > 0) result += `\nBom: ${finalScore.missed}`;
     if (finalScore.wrong > 0) result += `\nFeil: ${finalScore.wrong}`;
@@ -158,10 +158,8 @@ export class ResultScreen {
     const recordY = this.resultText.y + this.resultText.height / 2 + 8;
     if (recordLine) {
       const isNew = recordLine.startsWith("Ny");
-      const val = isNew
-        ? String(finalScore.total)
-        : String(Number(prev));
-      const prefix = isNew ? "Ny rekord: " : "Din rekord: ";
+      const val = isNew ? String(finalScore.total) : String(Number(prev));
+      const prefix = isNew ? "Ny rekord: " : "Din beste: ";
       this.recordLabel.setText(prefix).setPosition(0, recordY).setAlpha(1);
       this.recordValue.setText(val).setAlpha(1);
       this.recordSuffix.setText(" poeng").setAlpha(1);
@@ -171,10 +169,7 @@ export class ResultScreen {
         this.recordSuffix.width;
       const startX = this.btnCX - totalW / 2;
       this.recordLabel.setPosition(startX, recordY);
-      this.recordValue.setPosition(
-        startX + this.recordLabel.width,
-        recordY,
-      );
+      this.recordValue.setPosition(startX + this.recordLabel.width, recordY);
       this.recordSuffix.setPosition(
         startX + this.recordLabel.width + this.recordValue.width,
         recordY,
