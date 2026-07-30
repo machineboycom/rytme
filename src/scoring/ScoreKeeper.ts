@@ -15,6 +15,7 @@ export interface FinalScore {
   perfect: boolean;
 }
 
+/** Regnskap for treff, bom og feil. Regner ut sluttresultat og nøyaktighetsbonus. */
 export class ScoreKeeper {
   totalMissed = 0;
   totalWrong = 0;

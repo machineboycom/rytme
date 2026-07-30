@@ -16,6 +16,7 @@ const SEGMENTS = [
   { start: 8, count: 8 },
 ];
 
+/** Hovedspillogikk: styring av tilstandsmaskin, lydeplanlegging og inputhåndtering. */
 export class GameScene extends Phaser.Scene {
   private state: State = "countdown";
   private round = 0;

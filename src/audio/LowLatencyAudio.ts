@@ -1,3 +1,4 @@
+/** Web Audio-planlegger. Planlegger rim-, snare- og metronomelyder mot AudioContext-tidslinjen. */
 export class LowLatencyAudio {
   private scene: Phaser.Scene | null = null;
   private snareIndex = 0;

@@ -15,6 +15,7 @@ export interface DrawGridParams {
   resultRevealIndex: number;
 }
 
+/** Tegner rutenettet med sirkler og sveipe-markøren. */
 export class GridRenderer {
   readonly cellSize: number;
   readonly gridX: number;

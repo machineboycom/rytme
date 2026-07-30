@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 
+/** Laster inn lydfiler før spillet starter. */
 export class PreloadScene extends Phaser.Scene {
   constructor() {
     super({ key: "PreloadScene" });

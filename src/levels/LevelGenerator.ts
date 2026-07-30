@@ -4,6 +4,7 @@ export interface LevelData {
   sequence: boolean[];
 }
 
+/** Genererer dagens rytme ut fra dato-frø, 1–3 slag per takt, 16 slag totalt. */
 export class LevelGenerator {
   static generate(seed?: number): LevelData {
     const s = seed ?? dateSeed();

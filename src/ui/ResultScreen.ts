@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { colors } from "../theme";
 
+/** Resultatskjerm: poeng-oppsummering, rekordvisning, prøv-igjen-knapp og tile-reveal-animasjon. */
 export class ResultScreen {
   readonly btnCX: number;
   readonly btnCY: number;
