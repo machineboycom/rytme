@@ -3,8 +3,9 @@ import { audio } from "../audio/LowLatencyAudio";
 import { LevelGenerator, type LevelData } from "../levels/LevelGenerator";
 import { colors } from "../theme";
 import { GridRenderer, type State } from "../grid/GridRenderer";
-import { ScoreKeeper, type FinalScore } from "../scoring/ScoreKeeper";
+import { ScoreKeeper } from "../scoring/ScoreKeeper";
 import { ResultScreen } from "../ui/ResultScreen";
+import { announce } from "../accessibility";
 
 const BPM = 100;
 const TOTAL_BEATS = 16;
@@ -197,10 +198,12 @@ export class GameScene extends Phaser.Scene {
     this.grid.drawGrid(this.drawParams());
 
     if (target === "listen") {
+      announce(`Lytt`);
       const start = audio.currentTime + 0.05;
       this.phaseStartTime = start;
       this.scheduleCountInBeats(start, "listen", COUNT_IN);
     } else {
+      announce("Klar?");
       const start = this.phaseStartTime + this.seg.count * this.b;
       this.phaseStartTime = start;
       this.scheduleCountInBeats(start, "play", COUNT_IN);
@@ -220,6 +223,7 @@ export class GameScene extends Phaser.Scene {
     this.state = "playing";
     this.lastHighlight = -1;
     this.phaseStartTime = start;
+    announce("Spill");
     this.renderButton();
     this.scheduleBeats(start, this.seg.count, this.seg.start, false);
   }
@@ -278,19 +282,26 @@ export class GameScene extends Phaser.Scene {
 
         if (this.revealIndex >= TOTAL_BEATS) {
           const final = this.score.finalScore(seq, taps, this.tapAccuracy);
-          this.result.showResults(final.total, this.level.dateStr, {
-            correct: final.correct,
-            totalHits: final.totalHits,
-            finalWrong: final.wrong,
-            missed: final.missed,
-            wrong: final.wrong,
-            accuracyTotal: final.accuracyTotal,
-            minAccuracy: final.minAccuracy,
-            avgAccuracy: final.avgAccuracy,
-            total: final.total,
-            folkFlest: final.folkFlest,
-            perfect: final.perfect,
-          });
+          const recordLine = this.result.showResults(
+            final.total,
+            this.level.dateStr,
+            {
+              correct: final.correct,
+              totalHits: final.totalHits,
+              finalWrong: final.wrong,
+              missed: final.missed,
+              wrong: final.wrong,
+              accuracyTotal: final.accuracyTotal,
+              minAccuracy: final.minAccuracy,
+              avgAccuracy: final.avgAccuracy,
+              total: final.total,
+              folkFlest: final.folkFlest,
+              perfect: final.perfect,
+            },
+          );
+          let summary = `Treff ${final.correct}, bom ${final.missed}, feil ${final.wrong}. Totalt ${final.total} poeng.`;
+          if (recordLine) summary += ` ${recordLine}.`;
+          announce(summary);
           this.grid.drawGrid(this.drawParams());
           this.renderButton();
         }
@@ -323,7 +334,7 @@ export class GameScene extends Phaser.Scene {
           0,
           Math.round(100 * (1 - Math.abs(this.tapAccuracy[beat]) / 100)),
         );
-        console.log(`beat ${beat}: ${this.tapAccuracy[beat]}ms, accuracy ${acc}%`);
+        // console.log(`beat ${beat}: ${this.tapAccuracy[beat]}ms, accuracy ${acc}%`);
         audio.playSnareNow();
         if (this.level.sequence[beat]) {
           this.grid.showHitEffect(beat);

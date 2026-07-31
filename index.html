@@ -81,6 +81,16 @@
       #overlay.hidden {
         display: none;
       }
+      #announcer,
+      #game-description {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        clip-path: inset(50%);
+        white-space: nowrap;
+      }
     </style>
   </head>
   <body>
@@ -92,8 +102,24 @@
         <p>Lytt, husk, gjenta!</p>
         <p>Ny rytme hver dag.</p>
       </div>
-      <button id="start-btn">START</button>
+      <button id="start-btn" aria-describedby="game-description">START</button>
     </div>
+    <p id="game-description">
+      Rytme er et spill der du hører rytmer som du skal gjenta. Først hører du
+      fire klikk, så en rytme på fire slag. Husk slagene med tromme. Så teller
+      spillet ned fra fire, og du skal gjenta trommeslagene. Neste runde er lik,
+      men går dobbelt så fort. I siste runde er det åtte slag i rytmen du skal
+      gjenta. Poengsummen til slutt avgjøres av antall riktige slag, antall bom
+      og feil i tillegg til en nøyaktighetsbonus for hvert slag. Du kan spille
+      så mange ganger du vil. Trykk på skjermen eller bruk space for å slå på
+      tromma.
+    </p>
+    <div
+      id="announcer"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+    ></div>
     <script>
       const d = new Date();
       const parts = d
