@@ -39,7 +39,15 @@ Totalsum = `max(0, treff×100 − feil×100 − bom×50) + nøyaktighetsbonus`
 
 **Folk flest** = `max(0, antallRytmeslag − 1) × 177`
 
-**Perfekt!** oppnås når du treffer alle rytmeslag og ikke trykker på noen feil sirkler.
+**Perfekt!** oppnås når du treffer alle rytmeslag, ikke trykker på noen feil sirkler, og nøyaktigheten er minst 75 % på hvert enkelt slag.
+
+Tilbakemeldingen etter spillet baseres på nøyaktigheten:
+
+| Tilbakemelding | Krav |
+|---|---|
+| **Perfekt!** | Alle treff, ingen feil, og minst 75 % nøyaktighet på hvert slag |
+| **Bra!** | Ingen bom eller feil, og gjennomsnittlig nøyaktighet mellom 50 % og 90 % |
+| **OK, klarer du bedre?** | En eller flere bom/feil, eller gjennomsnittlig nøyaktighet under 50 % |
 
 ## Rekorder
 

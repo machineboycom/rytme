@@ -126,6 +126,8 @@ export class ResultScreen {
       missed: number;
       wrong: number;
       accuracyTotal: number;
+      minAccuracy: number;
+      avgAccuracy: number;
       total: number;
       folkFlest: number;
       perfect: boolean;
@@ -146,7 +148,19 @@ export class ResultScreen {
       localStorage.setItem(key, String(total));
     }
 
-    let result = finalScore.perfect ? "Bra!" : "";
+    let feedback = "";
+    if (finalScore.perfect && finalScore.minAccuracy >= 75) {
+      feedback = "Perfekt!";
+    } else if (
+      finalScore.missed === 0 &&
+      finalScore.wrong === 0 &&
+      finalScore.avgAccuracy >= 50
+    ) {
+      feedback = "Bra!";
+    } else {
+      feedback = "Klarer du bedre?";
+    }
+    let result = feedback;
     result += `\nTreff: ${finalScore.correct}`;
     if (finalScore.missed > 0) result += `\nBom: ${finalScore.missed}`;
     if (finalScore.wrong > 0) result += `\nFeil: ${finalScore.wrong}`;

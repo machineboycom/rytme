@@ -9,6 +9,8 @@ export interface FinalScore {
   wrong: number;
   totalHits: number;
   accuracyTotal: number;
+  minAccuracy: number;
+  avgAccuracy: number;
   hitScore: number;
   total: number;
   folkFlest: number;
@@ -20,7 +22,12 @@ export class ScoreKeeper {
   totalMissed = 0;
   totalWrong = 0;
 
-  scoreRound(seq: boolean[], taps: boolean[], start: number, count: number): RoundResult {
+  scoreRound(
+    seq: boolean[],
+    taps: boolean[],
+    start: number,
+    count: number,
+  ): RoundResult {
     let missed = 0;
     let wrong = 0;
 
@@ -35,7 +42,11 @@ export class ScoreKeeper {
     return { missed, wrong };
   }
 
-  finalScore(seq: boolean[], taps: boolean[], tapAccuracy: number[]): FinalScore {
+  finalScore(
+    seq: boolean[],
+    taps: boolean[],
+    tapAccuracy: number[],
+  ): FinalScore {
     const TOTAL_BEATS = 16;
 
     let correct = 0;
@@ -51,12 +62,15 @@ export class ScoreKeeper {
     }
 
     let accuracyTotal = 0;
+    let minAccuracy = 100;
     for (let i = 0; i < TOTAL_BEATS; i++) {
       if (seq[i] && taps[i]) {
-        accuracyTotal += Math.max(
+        const acc = Math.max(
           0,
           Math.round(100 * (1 - Math.abs(tapAccuracy[i]) / 100)),
         );
+        accuracyTotal += acc;
+        minAccuracy = Math.min(minAccuracy, acc);
       }
     }
 
@@ -65,8 +79,10 @@ export class ScoreKeeper {
       correct * 100 - finalWrong * 100 - finalMissed * 50,
     );
     const total = hitScore + accuracyTotal;
-    const folkFlest = Math.max(0, totalHits - 1) * 177;
+    const folkFlest = Math.max(0, totalHits) * 149; // 100 poeng per treff + 49 accuracy
     const perfect = correct === totalHits && finalWrong === 0;
+    const avgAccuracy = correct > 0 ? Math.round(accuracyTotal / correct) : 0;
+    minAccuracy = correct > 0 ? minAccuracy : 0;
 
     return {
       correct,
@@ -74,6 +90,8 @@ export class ScoreKeeper {
       wrong: finalWrong,
       totalHits,
       accuracyTotal,
+      minAccuracy,
+      avgAccuracy,
       hitScore,
       total,
       folkFlest,

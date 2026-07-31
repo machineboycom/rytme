@@ -285,6 +285,8 @@ export class GameScene extends Phaser.Scene {
             missed: final.missed,
             wrong: final.wrong,
             accuracyTotal: final.accuracyTotal,
+            minAccuracy: final.minAccuracy,
+            avgAccuracy: final.avgAccuracy,
             total: final.total,
             folkFlest: final.folkFlest,
             perfect: final.perfect,
@@ -317,7 +319,11 @@ export class GameScene extends Phaser.Scene {
         this.playerTaps[beat] = true;
         this.tapAccuracy[beat] =
           (rawBeat - Math.round(rawBeat)) * this.b * 1000;
-        console.log(this.tapAccuracy[beat]);
+        const acc = Math.max(
+          0,
+          Math.round(100 * (1 - Math.abs(this.tapAccuracy[beat]) / 100)),
+        );
+        console.log(`beat ${beat}: ${this.tapAccuracy[beat]}ms, accuracy ${acc}%`);
         audio.playSnareNow();
         if (this.level.sequence[beat]) {
           this.grid.showHitEffect(beat);
